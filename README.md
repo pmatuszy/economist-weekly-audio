@@ -28,13 +28,25 @@ gh repo edit --description "Download The Economist weekly audio edition, split i
 ## Setup
 
 1. Clone this repository.
-2. Create your local config (not committed to git):
+2. Provide config — pick one:
+
+   **A. Private config repo** (recommended if you use GitHub for secrets):
+
+   ```bash
+   git clone https://github.com/pmatuszy/economist-weekly-audio.git
+   git clone git@github.com:pmatuszy/economist-weekly-audio-private.git   # private — you only
+   ```
+
+   Keep both repos as siblings; scripts auto-load `../economist-weekly-audio-private/economist.local.conf`.
+
+   **B. Local file** (no private repo):
 
    ```bash
    cp economist.conf.example economist.local.conf
+   # edit economist.local.conf
    ```
 
-3. Edit `economist.local.conf`:
+3. Config variables:
 
    | Variable | Required | Description |
    |----------|----------|-------------|
@@ -77,18 +89,21 @@ ECONOMIST_CONF=/path/to/my.conf ./scripts/0-economist-runme.sh
 
 ## Secrets
 
-Never commit `economist.local.conf`. It is listed in `.gitignore`.
+- **Public repo:** never commit `economist.local.conf` (gitignored).
+- **Private repo:** [economist-weekly-audio-private](https://github.com/pmatuszy/economist-weekly-audio-private) — your RSS URL and healthcheck pings, visible only to you.
+
+Others using the public repo copy `economist.conf.example` or maintain their own private config repo.
 
 If you previously had URLs in scripts that were published anywhere, rotate your Healthchecks UUID and regenerate your Economist feed URL.
 
 ## Layout
 
 ```
-economist-weekly-audio/
-├── economist.conf.example    # template (safe to commit)
-├── economist.local.conf      # your secrets (gitignored)
-├── scripts/
-│   ├── _load-config.sh
-│   ├── 0-economist-runme.sh
-│   └── ...
+economist-weekly-audio/              # public
+├── economist.conf.example
+├── economist.local.conf             # optional local copy (gitignored)
+└── scripts/
+
+economist-weekly-audio-private/      # private sibling clone
+└── economist.local.conf             # your secrets on GitHub, not public
 ```

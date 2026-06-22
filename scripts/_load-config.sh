@@ -1,16 +1,36 @@
 # shellcheck shell=bash
-# Shared config loader for economist-pipeline scripts.
+# Shared config loader for economist-weekly-audio scripts.
+
+economist_default_conf_paths() {
+    local root="$1"
+    echo "${root}/economist.local.conf"
+    echo "${root}/../economist-weekly-audio-private/economist.local.conf"
+}
 
 load_economist_config() {
-    local conf root script_dir
+    local conf root script_dir candidate
 
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     root="$(cd "${script_dir}/.." && pwd)"
-    conf="${ECONOMIST_CONF:-${root}/economist.local.conf}"
 
-    if [[ ! -f "${conf}" ]]; then
-        echo "Missing config: ${conf}" >&2
-        echo "Copy economist.conf.example to economist.local.conf and edit." >&2
+    if [[ -n "${ECONOMIST_CONF:-}" ]]; then
+        conf="${ECONOMIST_CONF}"
+    else
+        conf=""
+        while IFS= read -r candidate; do
+            if [[ -f "${candidate}" ]]; then
+                conf="${candidate}"
+                break
+            fi
+        done < <(economist_default_conf_paths "${root}")
+    fi
+
+    if [[ -z "${conf}" || ! -f "${conf}" ]]; then
+        echo "Missing economist.local.conf" >&2
+        echo "Options:" >&2
+        echo "  1) cp economist.conf.example economist.local.conf and edit" >&2
+        echo "  2) clone economist-weekly-audio-private next to this repo" >&2
+        echo "  3) set ECONOMIST_CONF=/path/to/economist.local.conf" >&2
         exit 1
     fi
 
