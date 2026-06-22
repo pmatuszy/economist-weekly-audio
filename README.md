@@ -1,6 +1,8 @@
-# economist-pipeline
+# economist-weekly-audio
 
-Download and process [The Economist](https://www.economist.com/) weekly audio edition: split by chapter, add artwork, speed up and normalize speech, pack results.
+Download The Economist weekly audio edition, split into chapters, add artwork, speed up and normalize speech for listening, and pack results.
+
+**Topics:** `economist`, `the-economist`, `theeconomist`, `audio`, `ffmpeg`, `bash`, `mp3`, `audiobook`, `weekly-edition`
 
 ## Setup
 
@@ -61,7 +63,7 @@ If you previously had URLs in scripts that were published anywhere, rotate your 
 ## Layout
 
 ```
-economist-pipeline/
+economist-weekly-audio/
 ├── economist.conf.example    # template (safe to commit)
 ├── economist.local.conf      # your secrets (gitignored)
 ├── scripts/
