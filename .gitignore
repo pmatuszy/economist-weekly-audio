@@ -1,0 +1,9 @@
+# Local secrets and machine-specific settings — never commit
+economist.local.conf
+*.local.conf
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*~

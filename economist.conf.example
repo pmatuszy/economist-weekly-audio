@@ -1,0 +1,22 @@
+# Copy this file to economist.local.conf and edit for your environment:
+#   cp economist.conf.example economist.local.conf
+#
+# economist.local.conf is gitignored and must not be committed.
+
+# Required: personal Economist audio RSS URL (from your subscription).
+ECONOMIST_RSS_URL='https://feeds.economist.com/v1/rss/weekly/YOUR-UUID-HERE'
+
+# Optional: Healthchecks.io (or compatible) ping URL — base only, no /start or /fail suffix.
+# Leave empty to disable all healthcheck pings.
+HEALTHCHECK_URL=''
+
+# --- paths (adjust if your layout differs) ---
+ECONOMIST_BASE_DIR='/worek/economist/theEconomist'
+ECONOMIST_WORK_DIR="${ECONOMIST_BASE_DIR}/katalog-roboczy"
+ECONOMIST_OUTPUT_DIR="${ECONOMIST_BASE_DIR}/_obrobione"
+
+# --- optional tooling ---
+FFMPEG_PATH='/usr/local/bin/ffmpeg'
+# Set empty to skip chown (e.g. when running as your own user)
+ECONOMIST_FILE_OWNER='economist:ltd'
+CURL_IMPERSONATE='/usr/local/bin/curl-impersonate/curl_chrome116'
