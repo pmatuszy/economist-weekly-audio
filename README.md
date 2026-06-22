@@ -4,6 +4,27 @@ Download The Economist weekly audio edition, split into chapters, add artwork, s
 
 **Topics:** `economist`, `the-economist`, `theeconomist`, `audio`, `ffmpeg`, `bash`, `mp3`, `audiobook`, `weekly-edition`
 
+## Publish to GitHub
+
+When creating the repository (requires [GitHub CLI](https://cli.github.com/)):
+
+```bash
+gh repo create economist-weekly-audio --public --source=. --remote=origin --push \
+  --description "Download The Economist weekly audio edition, split into chapters, add artwork, speed up for listening." \
+  --add-topic economist --add-topic the-economist --add-topic theeconomist \
+  --add-topic audio --add-topic ffmpeg --add-topic bash --add-topic mp3 \
+  --add-topic audiobook --add-topic weekly-edition
+```
+
+If the repo already exists, set metadata with:
+
+```bash
+gh repo edit --description "Download The Economist weekly audio edition, split into chapters, add artwork, speed up for listening." \
+  --add-topic economist --add-topic the-economist --add-topic theeconomist \
+  --add-topic audio --add-topic ffmpeg --add-topic bash --add-topic mp3 \
+  --add-topic audiobook --add-topic weekly-edition
+```
+
 ## Setup
 
 1. Clone this repository.
