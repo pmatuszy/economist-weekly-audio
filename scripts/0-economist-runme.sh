@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.0 - 2026.06.19 - runtime messages translated to English
 # v. 0.9 - 2026.06.19 - changelog comments translated to English
 # v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
 # v. 0.7 - 2026.06.16 - secrets in economist.local.conf; child scripts via SCRIPT_DIR
@@ -16,8 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-# aktualne daty wydan sa tutaj - do sprawdzenia np. w przegladarce
-# https://www.economist.com/weeklyedition/archive
+# Edition dates: https://www.economist.com/weeklyedition/archive
 
 # Arg is optional; if provided it must be a real date in YYYY-MM-DD
 [[ $# -eq 0 ]] || [[ $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && $(date -d "$1" +%F 2>/dev/null) == "$1" ]] || { echo "Expected YYYY-MM-DD (e.g., 2025-09-13)"; exit 1; }
@@ -49,7 +49,7 @@ cd "${katalog_roboczy}"
 
 kod_powrotu=$?
 if (( kod_powrotu != 0 )); then
-   echo cos poszlo nie tak - nie moge zmienic katalogu na "${katalog_roboczy}" - kod powrotu to $kod_powrotu
+   echo "Something went wrong — cannot change to directory \"${katalog_roboczy}\" (exit code ${kod_powrotu})"
    exit $kod_powrotu
 fi
 
@@ -78,16 +78,16 @@ if [[ "$#" -eq 1 ]]; then
   najnowsze_wydanie=https://www.economist.com/weeklyedition/"$1"
 fi
 
-log "najnowsze_wydanie = $najnowsze_wydanie"
+log "latest_edition = $najnowsze_wydanie"
 
 nazwa_katalogu="${kat_wynikowy}/$(echo "${najnowsze_wydanie}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
-log "nazwa_katalogu = $nazwa_katalogu"
+log "edition_directory = $nazwa_katalogu"
 
 if [[ -d "${nazwa_katalogu}" && $(/bin/ls -A "${nazwa_katalogu}") ]]; then
    log_cz1=$( echo ;  echo ;
-   echo "katalog ${nazwa_katalogu} istnieje i nie jest pusty";
-   echo "Nie bede sciagal wydania jeszcze raz...";
-   echo "... wiec wychodze....";)
+   echo "Directory ${nazwa_katalogu} exists and is not empty";
+   echo "Will not download this edition again...";
+   echo "... exiting.";)
    hc_ping "" "${log_cz1}"
    log "$log_cz1"
    exit 0
@@ -96,16 +96,16 @@ fi
 mkdir -p "${nazwa_katalogu}" 2>/dev/null
 cd "${nazwa_katalogu}"
 
-log "jestem w katalogu $(pwd)"
+log "working directory: $(pwd)"
 
 log_cz1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
 kod_powrotu=$?
 
-log "log z wykonywania ${SCRIPT_DIR}/1-economist-download.sh:"
+log "output from ${SCRIPT_DIR}/1-economist-download.sh:"
 log "$log_cz1"
 log ""
 
-log "kod_powrotu z ${SCRIPT_DIR}/1-economist-download.sh = $kod_powrotu"
+log "exit code from ${SCRIPT_DIR}/1-economist-download.sh = $kod_powrotu"
 
 if [[ $kod_powrotu -eq 2 ]]; then
   hc_ping "" "${log_cz1}"
@@ -117,7 +117,7 @@ fi
 log_cz2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
 kod_powrotu=$?
 
-log "log z wykonywania ${SCRIPT_DIR}/2-economist-process-edition.sh:"
+log "output from ${SCRIPT_DIR}/2-economist-process-edition.sh:"
 log "$log_cz2"
 log ""
 

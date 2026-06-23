@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 1.6 - 2026.06.19 - runtime messages translated to English
 # v. 1.5 - 2026.06.19 - changelog comments translated to English
 # v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
 # v. 1.3 - 2026.06.16 - paths and chown from economist.local.conf
@@ -11,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-echo "---- Poczatek wykonywania skryptu $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
 kat_zrodlowy="${ECONOMIST_BASE_DIR}"
 kat_wynikowy="${ECONOMIST_WORK_DIR}"
@@ -22,14 +23,14 @@ mp3_file="${kat_wynikowy}/economist.mp3"
 
 if [[ ! -s "$mp3_file" || $(stat -c%s "$mp3_file") -lt 1000000 ]]; then
   echo
-  echo "❌ Plik $mp3_file nie istnieje lub jest zbyt maly. Czyszcze katalog roboczy (jesli pusty) i wychodze."
+  echo "❌ File $mp3_file is missing or too small. Cleaning up work directory (if empty) and exiting."
   cd /tmp || exit 1
   rmdir --ignore-fail-on-non-empty "$kat_wynikowy"
   exit 1
 fi
 
 cd "${kat_wynikowy}" || {
-  echo "Nie moge wejsc do katalogu ${kat_wynikowy}"
+  echo "Cannot change to directory ${kat_wynikowy}"
   exit 1
 }
 
@@ -153,4 +154,4 @@ rar a -htb     -m0 _org_file.rar artwork_*jpg
 
 economist_chown_if_set _org_file.rar
 
-echo "---- Koniec wykonywania skryptu   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"

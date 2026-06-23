@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.4 - 2026.06.19 - runtime messages translated to English
 # v. 2.3 - 2026.06.19 - changelog comments translated to English
 # v. 2.2 - 2026.06.19 - renamed from 3-zmien-szybkosc-podbij-glosnosc.sh
 # v. 2.1 - 2026.06.16 - ffmpeg path from economist.local.conf
@@ -9,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-echo "---- Poczatek wykonywania skryptu $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
 ffmpeg_path="${FFMPEG_PATH}"
 katalog_zrodlowy="${ECONOMIST_WORK_DIR}"
@@ -44,7 +45,7 @@ for p in $(find "${katalog_zrodlowy}" -type f -not -name \*SPEECHNORM_SPEEDUP\* 
      touch --reference="${p}" "$plik_wynikowy"
      rm "${p}_tymcz.${plik_wyn_ext}" "$p"
    else
-     echo "plik $p nie istnieje, nie odpalam ffmpega"
+     echo "File $p does not exist — skipping ffmpeg"
    fi
    sleep 0.1
 done
@@ -57,4 +58,4 @@ pwd
 
 ls -l
 
-echo "---- Koniec wykonywania skryptu   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
