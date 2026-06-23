@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 0.3 - 2026.06.19 - renamed from 4-wszystko-obrobione-przenies-wyniki.sh
 # v. 0.2 - 2026.06.16 - paths from economist.local.conf
 # v. 0.1 - 2021.04.19 - wersja inicjalna skryptu
 

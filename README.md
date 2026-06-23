@@ -76,10 +76,10 @@ Individual steps (normally called by `0-economist-runme.sh`):
 
 | Script | Step |
 |--------|------|
-| `1-economist-sciagnij.sh` | Download MP3 from RSS |
-| `2-economist-obrob.sh` | Split chapters, artwork, RAR |
-| `3-zmien-szybkosc-podbij-glosnosc.sh` | Speed + loudness (ffmpeg) |
-| `4-wszystko-obrobione-przenies-wyniki.sh` | Move to `_obrobione` |
+| `1-economist-download.sh` | Download MP3 from RSS |
+| `2-economist-process-edition.sh` | Split chapters, artwork, RAR |
+| `3-economist-speedup-loudness.sh` | Speed + loudness (ffmpeg) |
+| `4-economist-move-results.sh` | Move to `_obrobione` |
 
 Override config path:
 
@@ -95,6 +95,29 @@ ECONOMIST_CONF=/path/to/my.conf ./scripts/0-economist-runme.sh
 Others using the public repo copy `economist.conf.example` or maintain their own private config repo.
 
 If you previously had URLs in scripts that were published anywhere, rotate your Healthchecks UUID and regenerate your Economist feed URL.
+
+## Server deployment (git-economist-pull)
+
+On a server, use the helpers in **github-bin** (same family as `git-pull.sh` / `git-push.sh`):
+
+```bash
+git-pull.sh          # deploys github-bin to /root/bin
+git-economist-pull.sh   # clone/pull both repos under /root/repos/
+git-economist-push.sh   # push private config changes, then pull
+```
+
+Default server layout:
+
+```
+/root/repos/github-economist-weekly-audio/          # scripts
+/root/repos/github-economist-weekly-audio-private/ # economist.local.conf
+```
+
+Run the pipeline:
+
+```bash
+/root/repos/github-economist-weekly-audio/scripts/0-economist-runme.sh
+```
 
 ## Layout
 

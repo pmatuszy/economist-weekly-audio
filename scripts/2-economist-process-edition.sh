@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
 # v. 1.3 - 2026.06.16 - paths and chown from economist.local.conf
 # v. 1.2 - 2025.10.27 - bugfix: usunalem -df z rar dla artwork - bo jednak usuwal plik wejsciowy
 # v. 1.1 - 2025.10.21 - plik artwork jest dodawany do wynikowego rar ale nie jest usuwany

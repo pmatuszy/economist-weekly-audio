@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.2 - 2026.06.19 - renamed from 3-zmien-szybkosc-podbij-glosnosc.sh
 # v. 2.1 - 2026.06.16 - ffmpeg path from economist.local.conf
 # 2025.01.28 - v. 2.0 - bardzo duze zmiany - praktycznie nowy skrypt
 

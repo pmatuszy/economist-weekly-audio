@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
 # v. 0.7 - 2026.06.16 - secrets in economist.local.conf; child scripts via SCRIPT_DIR
 # v. 0.6 - 2025.04.18 - wysylanie statusu OK do healthchecka, gdy katalog juz istnieje (wiec nr zostal juz pobrany)
 # v. 0.5 - 2025.01.28 - duze zmiany po zmianach po stronie portalu The Economist
@@ -96,14 +97,14 @@ cd "${nazwa_katalogu}"
 
 log "jestem w katalogu $(pwd)"
 
-log_cz1=$(echo ; "${SCRIPT_DIR}/1-economist-sciagnij.sh" "${args[@]}" ; exit $?)
+log_cz1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
 kod_powrotu=$?
 
-log "log z wykonywania ${SCRIPT_DIR}/1-economist-sciagnij.sh:"
+log "log z wykonywania ${SCRIPT_DIR}/1-economist-download.sh:"
 log "$log_cz1"
 log ""
 
-log "kod_powrotu z ${SCRIPT_DIR}/1-economist-sciagnij.sh = $kod_powrotu"
+log "kod_powrotu z ${SCRIPT_DIR}/1-economist-download.sh = $kod_powrotu"
 
 if [[ $kod_powrotu -eq 2 ]]; then
   hc_ping "" "${log_cz1}"
@@ -112,10 +113,10 @@ if [[ $kod_powrotu -eq 2 ]]; then
   exit $kod_powrotu
 fi
 
-log_cz2=$(echo ; "${SCRIPT_DIR}/2-economist-obrob.sh" "${args[@]}" ; exit $?)
+log_cz2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
 kod_powrotu=$?
 
-log "log z wykonywania ${SCRIPT_DIR}/2-economist-obrob.sh:"
+log "log z wykonywania ${SCRIPT_DIR}/2-economist-process-edition.sh:"
 log "$log_cz2"
 log ""
 
@@ -126,7 +127,7 @@ if [[ $kod_powrotu -ne 0 ]]; then
   exit $kod_powrotu
 fi
 
-log_cz3=$(echo ; "${SCRIPT_DIR}/3-zmien-szybkosc-podbij-glosnosc.sh" ; exit $?)
+log_cz3=$(echo ; "${SCRIPT_DIR}/3-economist-speedup-loudness.sh" ; exit $?)
 kod_powrotu=$?
 
 if [[ $kod_powrotu -ne 0 ]]; then
@@ -136,7 +137,7 @@ if [[ $kod_powrotu -ne 0 ]]; then
   exit $kod_powrotu
 fi
 
-log_cz4=$(echo ; "${SCRIPT_DIR}/4-wszystko-obrobione-przenies-wyniki.sh" ; exit $?)
+log_cz4=$(echo ; "${SCRIPT_DIR}/4-economist-move-results.sh" ; exit $?)
 kod_powrotu=$?
 
 if [[ $kod_powrotu -ne 0 ]]; then

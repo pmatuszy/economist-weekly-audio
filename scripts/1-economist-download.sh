@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.6 - 2026.06.19 - renamed from 1-economist-sciagnij.sh
 # v. 2.5 - 2026.06.16 - RSS URL from economist.local.conf (not in git)
 # v. 2.4 - 2025.09.17 - auto-tip o xmllint + fallback grep kiedy xmllint brak/zwroci 0
 # v. 2.3 - 2025.09.17 - dodane echo/logi
