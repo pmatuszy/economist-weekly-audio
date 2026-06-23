@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
+# v. 0.9 - 2026.06.19 - changelog comments translated to English
 # v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
 # v. 0.7 - 2026.06.16 - secrets in economist.local.conf; child scripts via SCRIPT_DIR
-# v. 0.6 - 2025.04.18 - wysylanie statusu OK do healthchecka, gdy katalog juz istnieje (wiec nr zostal juz pobrany)
-# v. 0.5 - 2025.01.28 - duze zmiany po zmianach po stronie portalu The Economist
-# v. 0.4 - 2022.05.06 - dodalem obsluge healthcheckow
-# v. 0.3 - 2021.06.07 - zrobilem sprawdzanie kodu wyjscia ze wszystkich skryptow podrzednych
-# v. 0.2 - 2021.04.19 - zrobilem sprawdzanie kodu wyjscia ze skryptu 1-economist-sciagnij.sh
-# v. 0.1 - 2018.07.31 - wersja inicjalna skryptu
+# v. 0.6 - 2025.04.18 - ping healthcheck OK when output directory already exists (edition already downloaded)
+# v. 0.5 - 2025.01.28 - major changes after The Economist portal changes
+# v. 0.4 - 2022.05.06 - added healthcheck support
+# v. 0.3 - 2021.06.07 - check exit codes from all child scripts
+# v. 0.2 - 2021.04.19 - check exit code from 1-economist-download.sh
+# v. 0.1 - 2018.07.31 - initial release
 
 DEBUG=1
 

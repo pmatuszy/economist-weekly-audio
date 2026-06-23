@@ -1,9 +1,10 @@
 #!/bin/bash
+# v. 1.5 - 2026.06.19 - changelog comments translated to English
 # v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
 # v. 1.3 - 2026.06.16 - paths and chown from economist.local.conf
-# v. 1.2 - 2025.10.27 - bugfix: usunalem -df z rar dla artwork - bo jednak usuwal plik wejsciowy
-# v. 1.1 - 2025.10.21 - plik artwork jest dodawany do wynikowego rar ale nie jest usuwany
-# v. 1.0 - 2025.01.28 - bardzo duze zmiany - praktycznie nowy skrypt
+# v. 1.2 - 2025.10.27 - bugfix: removed -df from rar for artwork — it was deleting the input file
+# v. 1.1 - 2025.10.21 - artwork file is added to output RAR but not deleted
+# v. 1.0 - 2025.01.28 - major rewrite — practically a new script
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh

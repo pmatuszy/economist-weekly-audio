@@ -1,9 +1,10 @@
 #!/bin/bash
+# v. 2.7 - 2026.06.19 - changelog comments translated to English
 # v. 2.6 - 2026.06.19 - renamed from 1-economist-sciagnij.sh
 # v. 2.5 - 2026.06.16 - RSS URL from economist.local.conf (not in git)
-# v. 2.4 - 2025.09.17 - auto-tip o xmllint + fallback grep kiedy xmllint brak/zwroci 0
-# v. 2.3 - 2025.09.17 - dodane echo/logi
-# v. 2.2 - 2025.09.17 - opcjonalny argument YYYY-MM-DD -> n-ta pozycja z RSS (xmllint), bez arg. bierze pierwszy enclosure
+# v. 2.4 - 2025.09.17 - auto-tip for xmllint + grep fallback when xmllint missing or returns 0
+# v. 2.3 - 2025.09.17 - added echo/logging
+# v. 2.2 - 2025.09.17 - optional YYYY-MM-DD selects n-th RSS item (xmllint); default is first enclosure
 
 set -euo pipefail
 LC_ALL=C
