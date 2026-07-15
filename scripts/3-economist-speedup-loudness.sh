@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.9 - 2026.07.15 - restored numbered name 3-economist-speedup-loudness.sh
 # v. 2.8 - 2026.07.15 - renamed from 3-economist-speedup-loudness.sh
 # v. 2.7 - 2026.07.15 - added script description header
 # v. 2.5 - 2026.07.15 - Polish local variable names translated to English

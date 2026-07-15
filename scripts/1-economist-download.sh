@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 3.1 - 2026.07.15 - restored numbered name 1-economist-download.sh
 # v. 3.0 - 2026.07.15 - renamed from 1-economist-download.sh
 # v. 2.10 - 2026.07.15 - added script description header
 # v. 2.8 - 2026.06.19 - runtime messages translated to English

@@ -65,28 +65,28 @@ gh repo edit --description "Download The Economist weekly audio edition, split i
 Run the full pipeline:
 
 ```bash
-./scripts/economist-runme.sh
+./scripts/0-economist-runme.sh
 ```
 
 Optional edition date:
 
 ```bash
-./scripts/economist-runme.sh 2025-09-13
+./scripts/0-economist-runme.sh 2025-09-13
 ```
 
-Individual steps (normally called by `economist-runme.sh`):
+Individual steps (normally called by `0-economist-runme.sh`):
 
 | Script | Step |
 |--------|------|
-| `economist-download.sh` | Download MP3 from RSS |
-| `economist-process-edition.sh` | Split chapters, artwork, RAR |
-| `economist-speedup-loudness.sh` | Speed + loudness (ffmpeg) |
-| `economist-move-results.sh` | Move to `_obrobione` |
+| `1-economist-download.sh` | Download MP3 from RSS |
+| `2-economist-process-edition.sh` | Split chapters, artwork, RAR |
+| `3-economist-speedup-loudness.sh` | Speed + loudness (ffmpeg) |
+| `4-economist-move-results.sh` | Move to `_obrobione` |
 
 Override config path:
 
 ```bash
-ECONOMIST_CONF=/path/to/my.conf ./scripts/economist-runme.sh
+ECONOMIST_CONF=/path/to/my.conf ./scripts/0-economist-runme.sh
 ```
 
 ## Secrets
@@ -123,7 +123,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-`install.sh` is interactive: it shows the repo path, config plan, wrappers to create, and asks **Proceed with installation? [y/N/q]** before writing anything. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old numbered wrappers (`0-economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
+`install.sh` is interactive: it shows the repo path, config plan, wrappers to create, and asks **Proceed with installation? [y/N/q]** before writing anything. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old unnumbered wrappers (`economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
 
 Pull latest from GitHub and install in one step:
 
@@ -153,7 +153,7 @@ cd "${profile_location_dir:-$HOME}/github/economist-weekly-audio"
 ### 4. Run the pipeline
 
 ```bash
-"${profile_location_dir:-$HOME}/bin/economist-runme.sh"
+"${profile_location_dir:-$HOME}/bin/0-economist-runme.sh"
 ```
 
 Suggested layout:
@@ -162,7 +162,7 @@ Suggested layout:
 ${profile_location_dir:-$HOME}/github/economist-weekly-audio/          # scripts (git clone)
 ${profile_location_dir:-$HOME}/github/economist-weekly-audio-private/  # config source (git clone)
 ${profile_location_dir:-$HOME}/conf/economist.local.conf              # installed secrets (mode 600)
-${profile_location_dir:-$HOME}/bin/economist-runme.sh                # wrapper -> repo script
+${profile_location_dir:-$HOME}/bin/0-economist-runme.sh                # wrapper -> repo script
 ```
 
 ## Layout
