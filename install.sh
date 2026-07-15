@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.33 - crontab var ECONOMIST_RUN renamed to ECONOMIST_MAIN_SCRIPT
 # 2026.07.15 - v. 1.32 - detect outdated economist cron blocks (flock wrapper, old paths)
 # 2026.07.15 - v. 1.31 - cron runs script directly; flock is acquired inside scripts
 # 2026.07.15 - v. 1.30 - show installed vs repository script versions in install plan
@@ -472,11 +473,11 @@ warn_if_crontab_has_external_flock() {
         trimmed="${line#"${line%%[![:space:]]*}"}"
         [[ -n "${trimmed}" ]] || continue
         [[ "${trimmed}" =~ ^# ]] && continue
-        if [[ "${trimmed}" == *flock* ]] && [[ "${trimmed}" == *ECONOMIST_RUN* || "${trimmed}" == *economist-0-runme.sh* ]]; then
+        if [[ "${trimmed}" == *flock* ]] && [[ "${trimmed}" == *ECONOMIST_MAIN_SCRIPT* || "${trimmed}" == *ECONOMIST_RUN* || "${trimmed}" == *economist-0-runme.sh* ]]; then
             echo
             echo "NOTE: Your crontab wraps economist jobs in flock."
             echo "      Remove the flock wrapper — scripts now acquire the lock themselves."
-            echo "      Use: \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1"
+            echo "      Use: \${ECONOMIST_MAIN_SCRIPT} >>\${ECONOMIST_LOG} 2>&1"
             echo
             return 0
         fi
@@ -868,13 +869,16 @@ crontab_active_line_is_outdated() {
 
     core="$(cron_line_core_content "$line")"
 
+    if [[ "${trimmed}" == ECONOMIST_RUN=* ]]; then
+        return 0
+    fi
     if [[ "${trimmed}" == ECONOMIST_LOCK=* ]]; then
         return 0
     fi
     if [[ "${trimmed}" == ECONOMIST_LOG=* ]] && [[ "${trimmed}" != *'/var/log/economist-runme.log'* ]]; then
         return 0
     fi
-    if [[ "${core}" == *flock* ]] && [[ "${core}" == *'${ECONOMIST_RUN}'* || "${core}" == *economist-0-runme.sh* ]]; then
+    if [[ "${core}" == *flock* ]] && [[ "${core}" == *'${ECONOMIST_MAIN_SCRIPT}'* || "${core}" == *'${ECONOMIST_RUN}'* || "${core}" == *economist-0-runme.sh* ]]; then
         return 0
     fi
 
@@ -988,10 +992,10 @@ crontab_has_active_economist_jobs() {
         if [[ "${trimmed}" == *"economist-0-runme.sh"* ]]; then
             return 0
         fi
-        if [[ "${trimmed}" == ECONOMIST_RUN=* ]]; then
+        if [[ "${trimmed}" == ECONOMIST_MAIN_SCRIPT=* || "${trimmed}" == ECONOMIST_RUN=* ]]; then
             has_run_var=1
         fi
-        if [[ "${trimmed}" == *'${ECONOMIST_RUN}'* ]]; then
+        if [[ "${trimmed}" == *'${ECONOMIST_MAIN_SCRIPT}'* || "${trimmed}" == *'${ECONOMIST_RUN}'* ]]; then
             has_run_job=1
         fi
     done <<< "${crontab_content}"
@@ -1019,7 +1023,7 @@ build_economist_cron_paths() {
 
     mkdir -p "/var/lock" "/var/log" 2>/dev/null || true
 
-    ECON_CRON_RUN_CMD="\${ECONOMIST_RUN}"
+    ECON_CRON_RUN_CMD="\${ECONOMIST_MAIN_SCRIPT}"
     ECON_CRON_FLOCK_NOTE="# Overlap protection: economist-0-runme.sh locks at startup (ECONOMIST_LOCK_FILE in economist.local.conf)."
 }
 
@@ -1039,7 +1043,7 @@ ${header_comment}
 
 PROFILE_LOCATION_DIR=${BASE_DIR}
 ECONOMIST_BIN=${BIN_DIR}
-ECONOMIST_RUN=${ECON_CRON_RUN_SCRIPT}
+ECONOMIST_MAIN_SCRIPT=${ECON_CRON_RUN_SCRIPT}
 ECONOMIST_LOG=${ECON_CRON_LOG_FILE}
 ECONOMIST_OUTPUT=${ECON_CRON_OUTPUT_DIR}
 ECONOMIST_ARCHIVE=${ECON_CRON_ARCHIVE_DIR}
@@ -1109,7 +1113,8 @@ offer_crontab_obsolete_migration() {
     if (( outdated_block )); then
         print_section "Outdated economist cron block"
         echo "Your crontab uses an old economist format, for example:"
-        echo "  - /usr/bin/flock wrapping \${ECONOMIST_RUN}"
+        echo "  - /usr/bin/flock wrapping \${ECONOMIST_MAIN_SCRIPT} (or legacy \${ECONOMIST_RUN})"
+        echo "  - ECONOMIST_RUN= renamed to ECONOMIST_MAIN_SCRIPT"
         echo "  - ECONOMIST_LOCK= in crontab (lock is now inside the script)"
         echo "  - ECONOMIST_LOG under /root/var/log instead of /var/log"
         echo
