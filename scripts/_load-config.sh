@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.5 - cleanup_empty_dirs step label in summary
 # 2026.07.15 - v. 2.4 - ECONOMIST_ARCHIVE_DIR default; archive step label in summary
 # 2026.07.15 - v. 2.3 - clearer pipeline summary labels and step exit codes
 # 2026.07.15 - v. 2.2 - quiet rollback: remove only empty output placeholders
@@ -213,6 +214,7 @@ economist_format_step_name() {
         speedup) echo "3 — speedup & loudness" ;;
         move) echo "4 — move results" ;;
         archive) echo "archive editions" ;;
+        cleanup_empty_dirs) echo "cleanup empty output dirs" ;;
         complete) echo "all steps completed" ;;
         already_exists) echo "skipped (edition already exists)" ;;
         "") echo "unknown" ;;

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.35 - cleanup cron uses economist-cleanup-empty-dirs.sh (safe paths)
 # 2026.07.15 - v. 1.34 - archive cron uses economist-archive-editions.sh (replace on collision)
 # 2026.07.15 - v. 1.33 - crontab var ECONOMIST_RUN renamed to ECONOMIST_MAIN_SCRIPT
 # 2026.07.15 - v. 1.32 - detect outdated economist cron blocks (flock wrapper, old paths)
@@ -360,7 +361,7 @@ if (( DO_PULL )); then
     fi
 fi
 
-mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f \( -name 'economist-[0-9]-*.sh' -o -name 'economist-archive-*.sh' -o -name 'economist-script-reinstall.sh' \) | sort)
+mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f \( -name 'economist-[0-9]-*.sh' -o -name 'economist-archive-*.sh' -o -name 'economist-cleanup-*.sh' -o -name 'economist-script-reinstall.sh' \) | sort)
 
 if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
     echo "No installable scripts found in ${SCRIPTS_DIR}" >&2
@@ -886,6 +887,9 @@ crontab_active_line_is_outdated() {
     if [[ "${core}" == *'/bin/mv'* && "${core}" == *'${ECONOMIST_OUTPUT}'* ]]; then
         return 0
     fi
+    if [[ "${core}" == *'find '* && "${core}" == *'${ECONOMIST_OUTPUT}'* && "${core}" == *empty* ]]; then
+        return 0
+    fi
 
     return 1
 }
@@ -932,6 +936,9 @@ crontab_line_belongs_to_economist_block() {
         return 0
     fi
     if [[ "${trimmed}" =~ ^[0-9,@*/[:space:]-]+.*economist-0-runme\.sh ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^[0-9,@*/[:space:]-]+.*economist-cleanup ]]; then
         return 0
     fi
     if [[ "${trimmed}" =~ ^[0-9,@*/[:space:]-]+.*economist-archive ]]; then
@@ -1066,8 +1073,8 @@ ECONOMIST_ARCHIVE=${ECON_CRON_ARCHIVE_DIR}
 # Move processed editions to archive (Thursday night; replaces existing copy)
 0 2 * * 4 \${ECONOMIST_BIN}/economist-archive-editions.sh >>\${ECONOMIST_LOG} 2>&1
 
-# Remove empty output subdirs (Wednesday)
-0 4 * * 3 /usr/bin/find \${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
+# Remove empty edition subdirs in output (Wednesday)
+0 4 * * 3 \${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh >>\${ECONOMIST_LOG} 2>&1
 
 ${ECON_CRON_FLOCK_NOTE}
 EOF
@@ -1124,6 +1131,7 @@ offer_crontab_obsolete_migration() {
         echo "  - /usr/bin/flock wrapping \${ECONOMIST_MAIN_SCRIPT} (or legacy \${ECONOMIST_RUN})"
         echo "  - ECONOMIST_RUN= renamed to ECONOMIST_MAIN_SCRIPT"
         echo "  - /bin/mv for archive → use economist-archive-editions.sh (replaces existing copies)"
+        echo "  - find on \${ECONOMIST_OUTPUT} → use economist-cleanup-empty-dirs.sh"
         echo "  - ECONOMIST_LOCK= in crontab (lock is now inside the script)"
         echo "  - ECONOMIST_LOG under /root/var/log instead of /var/log"
         echo

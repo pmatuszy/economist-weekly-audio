@@ -23,8 +23,8 @@ ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
 # Archive processed editions (Thursday night; replaces existing copy)
 0 2 * * 4 ${ECONOMIST_BIN}/economist-archive-editions.sh >>${ECONOMIST_LOG} 2>&1
 
-# Remove empty edition folders in output dir (Wednesday)
-0 4 * * 3 /usr/bin/find ${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
+# Remove empty edition folders in output dir (Wednesday; paths from economist.local.conf)
+0 4 * * 3 ${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh >>${ECONOMIST_LOG} 2>&1
 
 # Obsolete paths (install.sh can comment these out in your crontab automatically):
 # /root/scripts/0-economist-runme.sh  →  ${ECONOMIST_MAIN_SCRIPT}
