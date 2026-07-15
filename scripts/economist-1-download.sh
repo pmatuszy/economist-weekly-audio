@@ -15,7 +15,22 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_economist-run-control.sh
 source "${SCRIPT_DIR}/_economist-run-control.sh"
-economist_source_script_header
+_economist_header_extra=()
+if ! tty >/dev/null 2>&1; then
+    _economist_header_extra=(NO_STARTUP_DELAY)
+fi
+_economist_header_file="$(economist_find_script_header_file)" || true
+if [[ -n "${_economist_header_file}" ]]; then
+    # shellcheck source=/dev/null
+    . "${_economist_header_file}" ${_economist_header_extra[@]+"${_economist_header_extra[@]}"}
+    if (( ! script_is_run_interactively )); then
+        echo "${SCRIPT_VERSION}"
+        echo
+    fi
+else
+    echo "Warning: _script_header.sh not found — install github-bin into ${profile_location_dir:-$HOME}/bin/." >&2
+fi
+unset _economist_header_file _economist_header_extra
 
 set -euo pipefail
 LC_ALL=C

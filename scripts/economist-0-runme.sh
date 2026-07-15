@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.15 - v. 1.8 - source github-bin _script_header.sh directly (drop wrapper)
+# 2026.07.15 - v. 1.9 - dot _script_header.sh at script top level (fixes banner)
 # 2026.07.15 - v. 1.7 - Ctrl-C cleanup, pipeline summary, improved child step capture
 # v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
@@ -15,6 +15,13 @@
 # v. 0.2 - 2021.04.19 - check exit code from 1-economist-download.sh
 # v. 0.1 - 2018.07.31 - initial release
 # Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
+
+if [[ "${0:-}" == *"/scripts/"* ]] || [[ "$(basename "${0:-}")" == 0-economist-runme.sh ]]; then
+    echo "WARNING: obsolete script path: ${0}" >&2
+    echo "Use ${profile_location_dir:-$HOME}/bin/economist-0-runme.sh instead." >&2
+    echo "Run: ${profile_location_dir:-$HOME}/bin/economist-script-reinstall.sh -y" >&2
+    echo >&2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -59,7 +66,23 @@ fi
 
 # shellcheck source=_economist-run-control.sh
 source "${SCRIPT_DIR}/_economist-run-control.sh"
-economist_source_script_header "${HEADER_EXTRA_ARGS[@]}"
+_economist_header_file="$(economist_find_script_header_file)" || true
+if [[ -n "${_economist_header_file}" ]]; then
+    if [[ ${#HEADER_EXTRA_ARGS[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${_economist_header_file}" NO_STARTUP_DELAY
+    else
+        # shellcheck source=/dev/null
+        . "${_economist_header_file}" "${HEADER_EXTRA_ARGS[@]}"
+    fi
+    if (( ! script_is_run_interactively )); then
+        echo "${SCRIPT_VERSION}"
+        echo
+    fi
+else
+    echo "Warning: _script_header.sh not found — install github-bin into ${profile_location_dir:-$HOME}/bin/." >&2
+fi
+unset _economist_header_file
 
 DEBUG=1
 

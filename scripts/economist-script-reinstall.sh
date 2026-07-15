@@ -78,7 +78,23 @@ fi
 
 # shellcheck source=_economist-run-control.sh
 source "${SCRIPT_DIR}/_economist-run-control.sh"
-economist_source_script_header "${HEADER_EXTRA_ARGS[@]}"
+_economist_header_file="$(economist_find_script_header_file)" || true
+if [[ -n "${_economist_header_file}" ]]; then
+    if [[ ${#HEADER_EXTRA_ARGS[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${_economist_header_file}" NO_STARTUP_DELAY
+    else
+        # shellcheck source=/dev/null
+        . "${_economist_header_file}" "${HEADER_EXTRA_ARGS[@]}"
+    fi
+    if (( ! script_is_run_interactively )); then
+        echo "${SCRIPT_VERSION}"
+        echo
+    fi
+else
+    echo "Warning: _script_header.sh not found — install github-bin into ${profile_location_dir:-$HOME}/bin/." >&2
+fi
+unset _economist_header_file
 
 BASE_DIR="${profile_location_dir:-$HOME}"
 GITHUB_DIR="${BASE_DIR}/github"
