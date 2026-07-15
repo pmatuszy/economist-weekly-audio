@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (drop wrapper)
 # 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
 # 2026.07.15 - v. 1.0 - clone/pull economist repos under github/ and run install.sh
 # economist-script-reinstall.sh
@@ -75,8 +76,9 @@ if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-# shellcheck source=_economist-script-header.sh
-source "${SCRIPT_DIR}/_economist-script-header.sh" "${HEADER_EXTRA_ARGS[@]}"
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_source_script_header "${HEADER_EXTRA_ARGS[@]}"
 
 BASE_DIR="${profile_location_dir:-$HOME}"
 GITHUB_DIR="${BASE_DIR}/github"

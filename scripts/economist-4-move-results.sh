@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.15 - v. 1.2 - Ctrl-C cleanup and run summary via _economist-run-control.sh
-# 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
+# 2026.07.15 - v. 1.3 - source github-bin _script_header.sh directly (drop wrapper)
 # v. 1.0 - 2026.07.15 - renamed to economist-4-move-results.sh
 # v. 0.9 - 2026.07.15 - restored numbered name 4-economist-move-results.sh
 # v. 0.7 - 2026.07.15 - added script description header
@@ -12,15 +11,14 @@
 # Moves processed files from the work directory to the output directory.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_economist-script-header.sh
-source "${SCRIPT_DIR}/_economist-script-header.sh"
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_source_script_header
 
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
 economist_run_control_init step
 economist_install_run_traps
 economist_set_run_step move

@@ -1,15 +1,50 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (no wrapper)
 # 2026.07.15 - v. 1.1 - child scripts skip summary when ECONOMIST_PIPELINE_PARENT is set
 # 2026.07.15 - v. 1.0 - Ctrl-C cleanup, rollback helpers, and run summary for economist scripts
 # _economist-run-control.sh
 #
-# Source after _economist-script-header.sh and _load-config.sh (when config is needed).
-# Call economist_run_control_init, then economist_install_run_traps.
+# economist_source_script_header — dots github-bin /root/bin/_script_header.sh
+# economist_run_control_init / economist_install_run_traps — after _load-config.sh when needed
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "Source this file; do not execute it directly." >&2
     exit 1
 fi
+
+economist_source_script_header() {
+    local -a extra=("$@")
+    local base_dir candidate header_file=""
+
+    if [[ ${#extra[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then
+        extra=(NO_STARTUP_DELAY)
+    fi
+
+    base_dir="${profile_location_dir:-$HOME}"
+    for candidate in \
+        "${base_dir}/bin/_script_header.sh" \
+        "/root/bin/_script_header.sh" \
+        "$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)/_script_header.sh"
+    do
+        if [[ -f "${candidate}" ]]; then
+            header_file="${candidate}"
+            break
+        fi
+    done
+
+    if [[ -n "${header_file}" ]]; then
+        # shellcheck source=/dev/null
+        . "${header_file}" "${extra[@]}"
+        if (( ! script_is_run_interactively )); then
+            echo "${SCRIPT_VERSION}"
+            echo
+        fi
+        return 0
+    fi
+
+    echo "Warning: _script_header.sh not found — install github-bin into ${base_dir}/bin/." >&2
+    return 1
+}
 
 : "${ECONOMIST_SUMMARY_PRINTED:=0}"
 : "${ECONOMIST_STOPPED_BY_USER:=no}"

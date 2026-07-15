@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.8 - source github-bin _script_header.sh directly (drop wrapper)
 # 2026.07.15 - v. 1.7 - Ctrl-C cleanup, pipeline summary, improved child step capture
-# 2026.07.15 - v. 1.6 - _script_header.sh banner via _economist-script-header.sh
 # v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
 # v. 1.1 - 2026.07.15 - added script description header
@@ -36,7 +36,7 @@ Options:
   --no_startup_delay   Skip random startup delay (recommended for cron).
   YYYY-MM-DD             Process a specific edition date instead of the latest.
 
-Requires _script_header.sh in the same bin directory (from github-bin).
+Requires github-bin _script_header.sh in \${profile_location_dir:-\$HOME}/bin/.
 EOF
             exit 0
             ;;
@@ -57,8 +57,9 @@ if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-# shellcheck source=_economist-script-header.sh
-source "${SCRIPT_DIR}/_economist-script-header.sh" "${HEADER_EXTRA_ARGS[@]}"
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_source_script_header "${HEADER_EXTRA_ARGS[@]}"
 
 DEBUG=1
 
@@ -66,8 +67,6 @@ DEBUG=1
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
 economist_run_control_init pipeline
 economist_install_run_traps
 

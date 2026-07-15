@@ -1,6 +1,5 @@
 #!/bin/bash
-# 2026.07.15 - v. 3.4 - Ctrl-C cleanup and run summary via _economist-run-control.sh
-# 2026.07.15 - v. 3.3 - _script_header.sh banner via _economist-script-header.sh
+# 2026.07.15 - v. 3.5 - source github-bin _script_header.sh directly (drop wrapper)
 # v. 3.2 - 2026.07.15 - renamed to economist-1-download.sh
 # v. 3.1 - 2026.07.15 - restored numbered name 1-economist-download.sh
 # v. 2.10 - 2026.07.15 - added script description header
@@ -14,8 +13,9 @@
 # Downloads the weekly Economist MP3 from the personal RSS feed.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_economist-script-header.sh
-source "${SCRIPT_DIR}/_economist-script-header.sh"
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_source_script_header
 
 set -euo pipefail
 LC_ALL=C
@@ -25,8 +25,6 @@ source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 require_economist_rss_url
 
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
 economist_run_control_init step
 economist_install_run_traps
 economist_set_run_step download

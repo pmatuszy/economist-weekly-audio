@@ -1,6 +1,5 @@
 #!/bin/bash
-# 2026.07.15 - v. 3.2 - Ctrl-C cleanup and run summary via _economist-run-control.sh
-# 2026.07.15 - v. 3.1 - _script_header.sh banner via _economist-script-header.sh
+# 2026.07.15 - v. 3.3 - source github-bin _script_header.sh directly (drop wrapper)
 # v. 3.0 - 2026.07.15 - renamed to economist-3-speedup-loudness.sh
 # v. 2.9 - 2026.07.15 - restored numbered name 3-economist-speedup-loudness.sh
 # v. 2.7 - 2026.07.15 - added script description header
@@ -13,15 +12,14 @@
 # Speeds up chapter MP3s and applies speech normalization and loudness filters.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_economist-script-header.sh
-source "${SCRIPT_DIR}/_economist-script-header.sh"
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_source_script_header
 
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
 economist_run_control_init step
 economist_install_run_traps
 economist_set_run_step speedup

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.20 - drop _economist-script-header.sh; use github-bin _script_header.sh
 # 2026.07.15 - v. 1.19 - install _economist-run-control.sh; Ctrl-C cleanup and pipeline summary
-# 2026.07.15 - v. 1.18 - banner on install; install _economist-script-header.sh into bin/
 # v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
 # v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
 # v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
@@ -113,8 +113,9 @@ if ! tty >/dev/null 2>&1; then
     INSTALL_HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-# shellcheck source=scripts/_economist-script-header.sh
-source "${SCRIPTS_DIR}/_economist-script-header.sh" "${INSTALL_HEADER_EXTRA_ARGS[@]}"
+# shellcheck source=scripts/_economist-run-control.sh
+source "${SCRIPTS_DIR}/_economist-run-control.sh"
+economist_source_script_header "${INSTALL_HEADER_EXTRA_ARGS[@]}"
 
 CONF_DIR="$(dirname "${BIN_DIR}")/conf"
 CONF_FILE="${CONF_DIR}/economist.local.conf"
@@ -498,13 +499,10 @@ install_bin_scripts() {
     chmod 755 "${BIN_DIR}/_load-config.sh"
     echo "Installed ${BIN_DIR}/_load-config.sh"
 
-    cp "${SCRIPTS_DIR}/_economist-script-header.sh" "${BIN_DIR}/_economist-script-header.sh"
-    chmod 755 "${BIN_DIR}/_economist-script-header.sh"
-    echo "Installed ${BIN_DIR}/_economist-script-header.sh"
-
     cp "${SCRIPTS_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-run-control.sh"
     chmod 755 "${BIN_DIR}/_economist-run-control.sh"
     echo "Installed ${BIN_DIR}/_economist-run-control.sh"
+    rm -f "${BIN_DIR}/_economist-script-header.sh"
 }
 
 print_crontab_hint() {
