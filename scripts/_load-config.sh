@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.9 - show-available: progress dots; Enter defaults to quit
 # 2026.07.15 - v. 2.8 - RSS list/verify helpers; interactive --show-available picker
 # 2026.07.15 - v. 2.7 - pipeline step exit codes: N/A when stage not reached
 # 2026.07.15 - v. 2.6 - summary: edition dir file count; cron archive from/to paths
@@ -243,7 +244,7 @@ economist_local_edition_status() {
 economist_show_and_pick_available_editions() {
     local -n _picked_iso_ref="$1"
     local rss_file="" item_count=0 pos=0 edition_iso="" title="" url="" local_status=""
-    local edition_dir="" choice="" idx=0
+    local edition_dir="" choice="" idx=0 dots_pid=0 verified_count=0
     local -a pick_positions=()
     local -a pick_isos=()
     local -a pick_titles=()
@@ -254,19 +255,38 @@ economist_show_and_pick_available_editions() {
     rss_file="$(mktemp)"
     trap 'rm -f "${rss_file}"' RETURN
 
-    echo "Fetching RSS and checking MP3 URLs on the server..."
+    printf 'Fetching RSS feed' >&2
+    (
+        while true; do
+            printf '.' >&2
+            sleep 0.4
+        done
+    ) &
+    dots_pid=$!
+
     if ! economist_rss_fetch_to "${rss_file}"; then
+        kill "${dots_pid}" 2>/dev/null || true
+        wait "${dots_pid}" 2>/dev/null || true
+        printf ' failed.\n' >&2
         echo "Failed to fetch RSS: ${ECONOMIST_RSS_URL}" >&2
         return 1
     fi
 
+    kill "${dots_pid}" 2>/dev/null || true
+    wait "${dots_pid}" 2>/dev/null || true
+
     item_count="$(economist_rss_item_count "${rss_file}")"
     if [[ "${item_count}" -eq 0 ]]; then
+        printf ' done (no items).\n' >&2
         echo "No items found in RSS feed." >&2
         return 1
     fi
 
+    printf ' ok (%s item(s)).\n' "${item_count}" >&2
+    printf 'Checking %s feed item(s) on server' "${item_count}" >&2
+
     for (( pos = 1; pos <= item_count; ++pos )); do
+        printf '.' >&2
         url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
         [[ -n "${url}" ]] || continue
         if ! economist_verify_enclosure_on_server "${url}"; then
@@ -282,7 +302,10 @@ economist_show_and_pick_available_editions() {
         pick_isos+=("${edition_iso}")
         pick_titles+=("${title}")
         pick_local+=("${local_status}")
+        (( ++verified_count )) || true
     done
+
+    printf ' %s verified.\n' "${verified_count}" >&2
 
     if [[ ${#pick_positions[@]} -eq 0 ]]; then
         echo "No editions verified as downloadable on the server." >&2
@@ -309,17 +332,17 @@ economist_show_and_pick_available_editions() {
 
     while true; do
         if [[ -r /dev/tty ]]; then
-            read -r -p "Pick edition number to download [1-${#pick_positions[@]}], or q to quit: " choice </dev/tty
+            read -r -p "Pick edition [1-${#pick_positions[@]}] (Enter/q=quit): " choice </dev/tty
         else
-            read -r -p "Pick edition number to download [1-${#pick_positions[@]}], or q to quit: " choice
+            read -r -p "Pick edition [1-${#pick_positions[@]}] (Enter/q=quit): " choice
         fi
 
         case "${choice}" in
-            q|Q)
+            q|Q|'')
                 return 0
                 ;;
-            ''|*[!0-9]*)
-                echo "Enter a number from 1 to ${#pick_positions[@]}, or q."
+            *[!0-9]*)
+                echo "Enter a number from 1 to ${#pick_positions[@]}, or press Enter to quit."
                 ;;
             *)
                 if (( choice >= 1 && choice <= ${#pick_positions[@]} )); then
@@ -327,7 +350,7 @@ economist_show_and_pick_available_editions() {
                     echo "Selected edition: ${_picked_iso_ref}"
                     return 0
                 fi
-                echo "Enter a number from 1 to ${#pick_positions[@]}, or q."
+                echo "Enter a number from 1 to ${#pick_positions[@]}, or press Enter to quit."
                 ;;
         esac
     done
