@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.18 - banner on install; install _economist-script-header.sh into bin/
 # v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
 # v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
 # v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
@@ -33,6 +34,7 @@ SCRIPTS_DIR="${REPO_ROOT}/scripts"
 BIN_DIR="${BASE_DIR}/bin"
 DO_PULL=0
 ASSUME_YES=0
+INSTALL_HEADER_EXTRA_ARGS=()
 
 LEGACY_WRAPPER_NAMES=(
     "0-economist-runme.sh"
@@ -65,6 +67,7 @@ Options:
   --bin-dir PATH   Target bin directory (default: \${profile_location_dir:-\$HOME}/bin)
   --pull           Run "git pull --ff-only" in this repo before installing
   -y, --yes        Install without prompts (auto-answer yes, like batch mode)
+  --no_startup_delay   Skip random startup delay from _script_header.sh
   -h, --help       Show this help
 
 Examples:
@@ -89,6 +92,10 @@ while [[ $# -gt 0 ]]; do
             ASSUME_YES=1
             shift
             ;;
+        --no_startup_delay|NO_STARTUP_DELAY)
+            INSTALL_HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -100,6 +107,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if ! tty >/dev/null 2>&1; then
+    INSTALL_HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
+fi
+
+# shellcheck source=scripts/_economist-script-header.sh
+source "${SCRIPTS_DIR}/_economist-script-header.sh" "${INSTALL_HEADER_EXTRA_ARGS[@]}"
 
 CONF_DIR="$(dirname "${BIN_DIR}")/conf"
 CONF_FILE="${CONF_DIR}/economist.local.conf"
@@ -482,6 +496,10 @@ install_bin_scripts() {
     cp "${SCRIPTS_DIR}/_load-config.sh" "${BIN_DIR}/_load-config.sh"
     chmod 755 "${BIN_DIR}/_load-config.sh"
     echo "Installed ${BIN_DIR}/_load-config.sh"
+
+    cp "${SCRIPTS_DIR}/_economist-script-header.sh" "${BIN_DIR}/_economist-script-header.sh"
+    chmod 755 "${BIN_DIR}/_economist-script-header.sh"
+    echo "Installed ${BIN_DIR}/_economist-script-header.sh"
 }
 
 print_crontab_hint() {

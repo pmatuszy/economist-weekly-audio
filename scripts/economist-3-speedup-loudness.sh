@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 3.1 - _script_header.sh banner via _economist-script-header.sh
 # v. 3.0 - 2026.07.15 - renamed to economist-3-speedup-loudness.sh
 # v. 2.9 - 2026.07.15 - restored numbered name 3-economist-speedup-loudness.sh
 # v. 2.7 - 2026.07.15 - added script description header
@@ -11,11 +12,14 @@
 # Speeds up chapter MP3s and applies speech normalization and loudness filters.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh"
+
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo
 
 ffmpeg_path="${FFMPEG_PATH}"
 work_dir="${ECONOMIST_WORK_DIR}"

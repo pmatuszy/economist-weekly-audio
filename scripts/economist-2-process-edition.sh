@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 2.2 - _script_header.sh banner via _economist-script-header.sh
 # v. 2.1 - 2026.07.15 - renamed to economist-2-process-edition.sh
 # v. 2.0 - 2026.07.15 - restored numbered name 2-economist-process-edition.sh
 # v. 1.8 - 2026.07.15 - added script description header
@@ -12,11 +13,14 @@
 # Splits chapters, embeds artwork, renames files, and archives the original MP3.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh"
+
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo
 
 work_dir="${ECONOMIST_WORK_DIR}"
 

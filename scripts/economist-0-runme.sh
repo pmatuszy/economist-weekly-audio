@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.15 - v. 1.6 - _script_header.sh banner (version, hostname); skip startup delay when non-tty
+# 2026.07.15 - v. 1.6 - _script_header.sh banner via _economist-script-header.sh
 # v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
 # v. 1.1 - 2026.07.15 - added script description header
@@ -56,29 +56,8 @@ if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-_script_header_file=""
-for _candidate in \
-    "${SCRIPT_DIR}/_script_header.sh" \
-    "/root/bin/_script_header.sh" \
-    "${profile_location_dir:-$HOME}/bin/_script_header.sh"
-do
-    if [[ -f "${_candidate}" ]]; then
-        _script_header_file="${_candidate}"
-        break
-    fi
-done
-
-if [[ -n "${_script_header_file}" ]]; then
-    # shellcheck source=/dev/null
-    . "${_script_header_file}" "${HEADER_EXTRA_ARGS[@]}"
-    if (( ! script_is_run_interactively )); then
-        echo "${SCRIPT_VERSION}"
-        echo
-    fi
-else
-    echo "Warning: _script_header.sh not found — skipping version banner." >&2
-    echo "Install github-bin scripts into bin/ (expected: ${SCRIPT_DIR}/_script_header.sh)." >&2
-fi
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh" "${HEADER_EXTRA_ARGS[@]}"
 
 DEBUG=1
 

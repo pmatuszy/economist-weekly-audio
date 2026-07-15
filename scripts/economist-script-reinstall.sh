@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
 # 2026.07.15 - v. 1.0 - clone/pull economist repos under github/ and run install.sh
 # economist-script-reinstall.sh
 #
@@ -74,28 +75,8 @@ if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-_script_header_file=""
-for _candidate in \
-    "${SCRIPT_DIR}/_script_header.sh" \
-    "/root/bin/_script_header.sh" \
-    "${profile_location_dir:-$HOME}/bin/_script_header.sh"
-do
-    if [[ -f "${_candidate}" ]]; then
-        _script_header_file="${_candidate}"
-        break
-    fi
-done
-
-if [[ -n "${_script_header_file}" ]]; then
-    # shellcheck source=/dev/null
-    . "${_script_header_file}" "${HEADER_EXTRA_ARGS[@]}"
-    if (( ! script_is_run_interactively )); then
-        echo "${SCRIPT_VERSION}"
-        echo
-    fi
-else
-    echo "Warning: _script_header.sh not found — skipping version banner." >&2
-fi
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh" "${HEADER_EXTRA_ARGS[@]}"
 
 BASE_DIR="${profile_location_dir:-$HOME}"
 GITHUB_DIR="${BASE_DIR}/github"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
 # v. 1.0 - 2026.07.15 - renamed to economist-4-move-results.sh
 # v. 0.9 - 2026.07.15 - restored numbered name 4-economist-move-results.sh
 # v. 0.7 - 2026.07.15 - added script description header
@@ -10,11 +11,14 @@
 # Moves processed files from the work directory to the output directory.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh"
+
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
-echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+echo
 
 work_dir="${ECONOMIST_WORK_DIR}"
 output_dir="${ECONOMIST_OUTPUT_DIR}"

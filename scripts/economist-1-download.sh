@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 3.3 - _script_header.sh banner via _economist-script-header.sh
 # v. 3.2 - 2026.07.15 - renamed to economist-1-download.sh
 # v. 3.1 - 2026.07.15 - restored numbered name 1-economist-download.sh
 # v. 2.10 - 2026.07.15 - added script description header
@@ -11,10 +12,13 @@
 # v. 2.2 - 2025.09.17 - optional YYYY-MM-DD selects n-th RSS item (xmllint); default is first enclosure
 # Downloads the weekly Economist MP3 from the personal RSS feed.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_economist-script-header.sh
+source "${SCRIPT_DIR}/_economist-script-header.sh"
+
 set -euo pipefail
 LC_ALL=C
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
@@ -24,7 +28,6 @@ command -v xmllint >/dev/null 2>&1 || echo "[INFO] Tip: 'xmllint' not found. Ins
 Debian/Ubuntu: 'apt install libxml2-utils' | RHEL/CentOS: 'yum install libxml2' | Alpine: 'apk add libxml2-utils'"
 
 echo
-echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
 work_dir="${ECONOMIST_WORK_DIR}"
 
