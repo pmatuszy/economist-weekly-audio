@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.13 - show-available pick: accept leading zeros (e.g. 000010 → 10)
 # 2026.07.15 - v. 2.12 - Issue column shows Economist issue number (e.g. 9419)
 # 2026.07.15 - v. 2.11 - show-available pick prompt: Enter/Q=quit default; number=download
 # 2026.07.15 - v. 2.10 - show-available table: Issue column (RSS feed position)
@@ -378,6 +379,7 @@ economist_show_and_pick_available_editions() {
                 echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
                 ;;
             *)
+                choice=$((10#${choice}))
                 if (( choice >= 1 && choice <= ${#pick_isos[@]} )); then
                     _picked_iso_ref="${pick_isos[choice - 1]}"
                     echo "Selected edition: ${_picked_iso_ref} (issue ${pick_issues[choice - 1]})"
