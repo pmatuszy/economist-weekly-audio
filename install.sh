@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.31 - cron runs script directly; flock is acquired inside scripts
 # 2026.07.15 - v. 1.30 - show installed vs repository script versions in install plan
 # 2026.07.15 - v. 1.29 - merge run-control into _load-config.sh; drop separate helper file
 # 2026.07.15 - v. 1.28 - ECONOMIST_LOCK defaults to /var/lock/economist-runme.lock
@@ -417,53 +418,68 @@ install_flock_package() {
     return 1
 }
 
-resolve_flock_for_cron() {
+resolve_flock_for_scripts() {
     local flock_bin
 
     flock_bin="$(flock_path)"
     if [[ -n "${flock_bin}" ]]; then
-        FLOCK_BIN="${flock_bin}"
-        USE_FLOCK_IN_CRON=1
+        echo "flock is available (${flock_bin}) — scripts lock at startup."
         return 0
     fi
 
-    FLOCK_BIN=""
-    USE_FLOCK_IN_CRON=0
-
     if (( ASSUME_YES )); then
-        echo "flock is not installed — crontab hint will omit flock (--yes)."
+        echo "WARNING: flock is not installed — scripts cannot prevent overlapping runs (--yes)." >&2
         return 0
     fi
 
     echo "flock is not installed (usually from the util-linux package)."
+    echo "Economist scripts use flock at startup to skip when another instance is running."
 
     if [[ "$(id -u)" -eq 0 ]]; then
-        read_yes_no_quit "Install util-linux now to enable flock in cron? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
+        read_yes_no_quit "Install util-linux now? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
         case "${REPLY}" in
             y)
                 if install_flock_package; then
                     flock_bin="$(flock_path)"
                     if [[ -n "${flock_bin}" ]]; then
-                        FLOCK_BIN="${flock_bin}"
-                        USE_FLOCK_IN_CRON=1
-                        echo "flock installed: ${FLOCK_BIN}"
+                        echo "flock installed: ${flock_bin}"
                         return 0
                     fi
                 fi
-                echo "flock still not available — crontab hint will omit flock." >&2
+                echo "flock still not available." >&2
                 ;;
             q)
                 echo "Quit."
                 exit 0
                 ;;
             *)
-                echo "Crontab hint will omit flock (overlapping cron runs are possible)."
+                echo "Continuing without flock — overlapping runs are possible."
                 ;;
         esac
     else
         echo "Not running as root — cannot install flock."
-        echo "Crontab hint will omit flock (overlapping cron runs are possible)."
+        echo "Overlapping runs are possible until flock is installed."
     fi
+}
+
+warn_if_crontab_has_external_flock() {
+    local crontab_content="$1" line trimmed
+
+    [[ -n "${crontab_content}" ]] || return 0
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        trimmed="${line#"${line%%[![:space:]]*}"}"
+        [[ -n "${trimmed}" ]] || continue
+        [[ "${trimmed}" =~ ^# ]] && continue
+        if [[ "${trimmed}" == *flock* ]] && [[ "${trimmed}" == *ECONOMIST_RUN* || "${trimmed}" == *economist-0-runme.sh* ]]; then
+            echo
+            echo "NOTE: Your crontab wraps economist jobs in flock."
+            echo "      Remove the flock wrapper — scripts now acquire the lock themselves."
+            echo "      Use: \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1"
+            echo
+            return 0
+        fi
+    done <<< "${crontab_content}"
 }
 
 find_legacy_wrappers() {
@@ -754,8 +770,9 @@ print_crontab_hint() {
     fi
 
     print_section "Crontab hint — add with: crontab -e"
-    resolve_flock_for_cron
+    resolve_flock_for_scripts
     build_economist_cron_paths
+    warn_if_crontab_has_external_flock "${current_crontab}"
     echo_economist_cron_block "hint"
     echo "${SECTION_RULE}"
     echo
@@ -861,7 +878,6 @@ crontab_has_active_economist_jobs() {
 
 build_economist_cron_paths() {
     ECON_CRON_RUN_SCRIPT="${BIN_DIR}/economist-0-runme.sh"
-    ECON_CRON_LOCK_FILE="/var/lock/economist-runme.lock"
     ECON_CRON_LOG_FILE="/var/log/economist-runme.log"
     ECON_CRON_BASE_DIR="/worek/economist/theEconomist"
     ECON_CRON_OUTPUT_DIR="${ECON_CRON_BASE_DIR}/_obrobione"
@@ -877,15 +893,8 @@ build_economist_cron_paths() {
 
     mkdir -p "/var/lock" "/var/log" 2>/dev/null || true
 
-    if (( USE_FLOCK_IN_CRON )); then
-        ECON_CRON_RUN_CMD="${FLOCK_BIN} -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN}"
-        ECON_CRON_LOCK_VAR="ECONOMIST_LOCK=${ECON_CRON_LOCK_FILE}"
-        ECON_CRON_FLOCK_NOTE="# Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path."
-    else
-        ECON_CRON_RUN_CMD="\${ECONOMIST_RUN}"
-        ECON_CRON_LOCK_VAR="# ECONOMIST_LOCK=  (flock not installed — cron runs without overlap lock)"
-        ECON_CRON_FLOCK_NOTE="# flock not installed — install util-linux for overlap protection."
-    fi
+    ECON_CRON_RUN_CMD="\${ECONOMIST_RUN}"
+    ECON_CRON_FLOCK_NOTE="# Overlap protection: economist-0-runme.sh locks at startup (ECONOMIST_LOCK_FILE in economist.local.conf)."
 }
 
 echo_economist_cron_block() {
@@ -905,7 +914,6 @@ ${header_comment}
 PROFILE_LOCATION_DIR=${BASE_DIR}
 ECONOMIST_BIN=${BIN_DIR}
 ECONOMIST_RUN=${ECON_CRON_RUN_SCRIPT}
-${ECON_CRON_LOCK_VAR}
 ECONOMIST_LOG=${ECON_CRON_LOG_FILE}
 ECONOMIST_OUTPUT=${ECON_CRON_OUTPUT_DIR}
 ECONOMIST_ARCHIVE=${ECON_CRON_ARCHIVE_DIR}

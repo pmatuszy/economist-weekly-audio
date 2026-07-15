@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.2 - quiet rollback: remove only empty output placeholders
+# 2026.07.15 - v. 2.1 - acquire flock at startup; skip if another instance is running
 # 2026.07.15 - v. 2.0 - merge run-control (traps, summary, cleanup) into this file
 # v. 1.4 - 2026.07.15 - load config from ${profile_location_dir:-$HOME}/conf/
 # v. 1.0 - 2026.06.16 - shared config loader for pipeline scripts
@@ -109,6 +111,7 @@ load_economist_config() {
     : "${ECONOMIST_FILE_OWNER:=}"
     : "${CURL_IMPERSONATE:=/usr/local/bin/curl-impersonate/curl_chrome116}"
     : "${HEALTHCHECK_URL:=}"
+    : "${ECONOMIST_LOCK_FILE:=/var/lock/economist-runme.lock}"
 }
 
 require_economist_rss_url() {
@@ -153,6 +156,30 @@ economist_chown_if_set() {
 economist_restore_screen_title() {
     if [[ -n "${STY:-}" ]]; then
         echo -ne "${tcScrTitleStart}${CALLER_SCRIPT_BASENAME:-$(basename "${BASH_SOURCE[1]}")}${tcScrTitleEnd}"
+    fi
+}
+
+economist_acquire_run_lock() {
+    local lock_file="${ECONOMIST_LOCK_FILE:-/var/lock/economist-runme.lock}"
+    local lock_dir=""
+
+    [[ -z "${ECONOMIST_PIPELINE_PARENT:-}" ]] || return 0
+    [[ -n "${ECONOMIST_SKIP_RUN_LOCK:-}" ]] && return 0
+
+    lock_dir="$(dirname "${lock_file}")"
+    mkdir -p "${lock_dir}" 2>/dev/null || true
+
+    if ! command -v flock >/dev/null 2>&1; then
+        echo "WARNING: flock is not installed — overlapping runs are possible." >&2
+        echo "Install util-linux, or set ECONOMIST_SKIP_RUN_LOCK=1 in economist.local.conf." >&2
+        return 0
+    fi
+
+    exec {ECONOMIST_LOCK_FD}>>"${lock_file}"
+    if ! flock -n "${ECONOMIST_LOCK_FD}"; then
+        echo "Another economist instance is already running — exiting."
+        echo "Lock file: ${lock_file}"
+        exit 0
     fi
 }
 
@@ -236,31 +263,15 @@ economist_cleanup_work_dir() {
     rm -f "${work_dir}"/*.mp3 2>/dev/null || true
 }
 
-economist_cleanup_edition_placeholder() {
-    local edition_dir="$1"
+economist_cleanup_empty_output_placeholder() {
+    local output_dir="$1" edition_name="$2" target=""
 
-    [[ -n "${edition_dir}" && -d "${edition_dir}" ]] || return 0
-
-    if [[ -z "$(ls -A "${edition_dir}" 2>/dev/null)" ]]; then
-        echo "Removing empty edition directory: ${edition_dir}"
-        rmdir --ignore-fail-on-non-empty "${edition_dir}" 2>/dev/null || true
-    else
-        echo "Leaving edition directory for manual review: ${edition_dir}" >&2
-    fi
-}
-
-economist_cleanup_output_edition_dir() {
-    local output_dir="$1"
-    local edition_name="$2"
-
-    local target=""
     [[ -n "${output_dir}" && -n "${edition_name}" ]] || return 0
     target="${output_dir}/${edition_name}"
-
     [[ -d "${target}" ]] || return 0
+    [[ -z "$(ls -A "${target}" 2>/dev/null)" ]] || return 0
 
-    echo "Removing incomplete output edition folder: ${target}"
-    rm -rf "${target}"
+    rmdir --ignore-fail-on-non-empty "${target}" 2>/dev/null || true
 }
 
 economist_cleanup_step_artifacts() {
@@ -285,7 +296,7 @@ economist_cleanup_step_artifacts() {
 
 economist_cleanup_pipeline_artifacts() {
     local work_dir="$1"
-    local edition_dir="$2"
+    local _edition_dir="$2"
     local output_dir="$3"
     local edition_name="$4"
 
@@ -295,10 +306,7 @@ economist_cleanup_pipeline_artifacts() {
     echo
     echo "Rolling back incomplete pipeline artifacts..."
     economist_cleanup_work_dir "${work_dir}" 1
-    economist_cleanup_edition_placeholder "${edition_dir}"
-    if [[ -n "${edition_name}" ]]; then
-        economist_cleanup_output_edition_dir "${output_dir}" "${edition_name}"
-    fi
+    economist_cleanup_empty_output_placeholder "${output_dir}" "${edition_name}"
     echo
 }
 
@@ -398,6 +406,7 @@ economist_on_interrupt() {
 }
 
 economist_install_run_traps() {
+    economist_acquire_run_lock
     trap economist_on_interrupt INT
 }
 

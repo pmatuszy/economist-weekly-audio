@@ -18,6 +18,10 @@ ECONOMIST_WORK_DIR="${ECONOMIST_BASE_DIR}/katalog-roboczy"
 ECONOMIST_OUTPUT_DIR="${ECONOMIST_BASE_DIR}/_obrobione"
 
 # --- optional tooling ---
+# Lock file for overlap protection (scripts use flock at startup).
+ECONOMIST_LOCK_FILE='/var/lock/economist-runme.lock'
+# ECONOMIST_SKIP_RUN_LOCK=1
+
 FFMPEG_PATH='/usr/local/bin/ffmpeg'
 # Set empty to skip chown (e.g. when running as your own user)
 ECONOMIST_FILE_OWNER='economist:ltd'
