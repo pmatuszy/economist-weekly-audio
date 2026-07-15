@@ -16,6 +16,7 @@ HEALTHCHECK_URL=''
 ECONOMIST_BASE_DIR='/worek/economist/theEconomist'
 ECONOMIST_WORK_DIR="${ECONOMIST_BASE_DIR}/katalog-roboczy"
 ECONOMIST_OUTPUT_DIR="${ECONOMIST_BASE_DIR}/_obrobione"
+ECONOMIST_ARCHIVE_DIR="${ECONOMIST_BASE_DIR}/archive"
 
 # --- optional tooling ---
 # Lock file for overlap protection (scripts use flock at startup).

@@ -20,8 +20,8 @@ ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
 15 0-4  * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT} >>${ECONOMIST_LOG} 2>&1
 15 7-22 * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT} >>${ECONOMIST_LOG} 2>&1
 
-# Archive processed editions (Thursday night)
-0 2 * * 4 /bin/mv -f ${ECONOMIST_OUTPUT}/[0-9]* ${ECONOMIST_ARCHIVE}/ 2>/dev/null
+# Archive processed editions (Thursday night; replaces existing copy)
+0 2 * * 4 ${ECONOMIST_BIN}/economist-archive-editions.sh >>${ECONOMIST_LOG} 2>&1
 
 # Remove empty edition folders in output dir (Wednesday)
 0 4 * * 3 /usr/bin/find ${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete

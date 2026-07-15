@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.4 - ECONOMIST_ARCHIVE_DIR default; archive step label in summary
 # 2026.07.15 - v. 2.3 - clearer pipeline summary labels and step exit codes
 # 2026.07.15 - v. 2.2 - quiet rollback: remove only empty output placeholders
 # 2026.07.15 - v. 2.1 - acquire flock at startup; skip if another instance is running
@@ -108,6 +109,7 @@ load_economist_config() {
     : "${ECONOMIST_BASE_DIR:=/worek/economist/theEconomist}"
     : "${ECONOMIST_WORK_DIR:=${ECONOMIST_BASE_DIR}/katalog-roboczy}"
     : "${ECONOMIST_OUTPUT_DIR:=${ECONOMIST_BASE_DIR}/_obrobione}"
+    : "${ECONOMIST_ARCHIVE_DIR:=${ECONOMIST_BASE_DIR}/archive}"
     : "${FFMPEG_PATH:=/usr/local/bin/ffmpeg}"
     : "${ECONOMIST_FILE_OWNER:=}"
     : "${CURL_IMPERSONATE:=/usr/local/bin/curl-impersonate/curl_chrome116}"
@@ -210,6 +212,7 @@ economist_format_step_name() {
         process) echo "2 — process edition" ;;
         speedup) echo "3 — speedup & loudness" ;;
         move) echo "4 — move results" ;;
+        archive) echo "archive editions" ;;
         complete) echo "all steps completed" ;;
         already_exists) echo "skipped (edition already exists)" ;;
         "") echo "unknown" ;;
