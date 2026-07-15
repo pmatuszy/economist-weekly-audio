@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.8 - 2026.07.15 - offer to replace conf/ config from private repo (20s, default N)
 # v. 1.7 - 2026.07.15 - wrappers economist-*.sh; prompt to remove legacy numbered names
 # v. 1.6 - 2026.07.15 - prompts default no [y/N/q]; --yes still auto-yes
 # v. 1.5 - 2026.07.15 - prompts default yes [Y/n/q]; --yes auto-fixes chmod 600
@@ -14,6 +15,7 @@ set -euo pipefail
 
 BASE_DIR="${profile_location_dir:-$HOME}"
 PROMPT_TIMEOUT=300
+CONFIG_REPLACE_TIMEOUT=20
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -110,16 +112,19 @@ if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
 fi
 
 read_yes_no_quit() {
-    local prompt="$1" answer=""
+    local prompt="$1"
+    local timeout="${2:-${PROMPT_TIMEOUT}}"
+    local allow_batch="${3:-1}"
+    local answer=""
 
-    if (( ASSUME_YES )); then
+    if (( ASSUME_YES && allow_batch )); then
         echo "${prompt}y (--yes)"
         REPLY=y
         return 0
     fi
 
     echo -n "${prompt}"
-    read -t "${PROMPT_TIMEOUT}" -n 1 answer || answer=""
+    read -t "${timeout}" -n 1 answer || answer=""
     echo
     answer="${answer//$'\r'/}"
 
@@ -212,6 +217,9 @@ check_config_permissions() {
 describe_config_plan() {
     if [[ -f "${CONF_FILE}" ]]; then
         echo "  target: ${CONF_FILE} (already exists)"
+        if [[ -f "${PRIVATE_CONF}" ]]; then
+            echo "  source: ${PRIVATE_CONF} (will offer replace, ${CONFIG_REPLACE_TIMEOUT}s, default no)"
+        fi
         check_config_permissions "${CONF_FILE}"
         return
     fi
@@ -242,6 +250,26 @@ install_config_file() {
     if [[ -f "${CONF_FILE}" ]]; then
         echo "Config: ${CONF_FILE}"
         check_config_permissions "${CONF_FILE}"
+
+        if [[ -f "${PRIVATE_CONF}" ]]; then
+            read_yes_no_quit "Replace ${CONF_FILE} with ${PRIVATE_CONF}? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
+            case "${REPLY}" in
+                y)
+                    check_config_permissions "${PRIVATE_CONF}"
+                    cp "${PRIVATE_CONF}" "${CONF_FILE}"
+                    chmod 600 "${CONF_FILE}"
+                    echo "Replaced config: ${CONF_FILE} (from ${PRIVATE_CONF})"
+                    check_config_permissions "${CONF_FILE}"
+                    ;;
+                q)
+                    echo "Quit."
+                    exit 0
+                    ;;
+                *)
+                    echo "Kept existing config: ${CONF_FILE}"
+                    ;;
+            esac
+        fi
         return
     fi
 
