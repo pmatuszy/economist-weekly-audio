@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.6 - _script_header.sh banner (version, hostname); skip startup delay when non-tty
 # v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
 # v. 1.1 - 2026.07.15 - added script description header
@@ -14,17 +15,76 @@
 # v. 0.1 - 2018.07.31 - initial release
 # Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+HEADER_EXTRA_ARGS=()
+edition_date_args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no_startup_delay|NO_STARTUP_DELAY)
+            HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
+            shift
+            ;;
+        -h|--help)
+            cat <<EOF
+Usage: $(basename "$0") [--no_startup_delay] [YYYY-MM-DD]
+
+Run the full Economist weekly audio pipeline.
+
+Options:
+  --no_startup_delay   Skip random startup delay (recommended for cron).
+  YYYY-MM-DD             Process a specific edition date instead of the latest.
+
+Requires _script_header.sh in the same bin directory (from github-bin).
+EOF
+            exit 0
+            ;;
+        *)
+            if [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && $(date -d "$1" +%F 2>/dev/null) == "$1" ]]; then
+                edition_date_args=("$1")
+                shift
+            else
+                echo "Unknown argument or invalid date: $1" >&2
+                echo "Expected YYYY-MM-DD (e.g., 2025-09-13) or --no_startup_delay" >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if ! tty >/dev/null 2>&1; then
+    HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
+fi
+
+_script_header_file=""
+for _candidate in \
+    "${SCRIPT_DIR}/_script_header.sh" \
+    "/root/bin/_script_header.sh" \
+    "${profile_location_dir:-$HOME}/bin/_script_header.sh"
+do
+    if [[ -f "${_candidate}" ]]; then
+        _script_header_file="${_candidate}"
+        break
+    fi
+done
+
+if [[ -n "${_script_header_file}" ]]; then
+    # shellcheck source=/dev/null
+    . "${_script_header_file}" "${HEADER_EXTRA_ARGS[@]}"
+    if (( ! script_is_run_interactively )); then
+        echo "${SCRIPT_VERSION}"
+        echo
+    fi
+else
+    echo "Warning: _script_header.sh not found — skipping version banner." >&2
+    echo "Install github-bin scripts into bin/ (expected: ${SCRIPT_DIR}/_script_header.sh)." >&2
+fi
+
 DEBUG=1
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
-
-# Edition dates: https://www.economist.com/weeklyedition/archive
-
-# Arg is optional; if provided it must be a real date in YYYY-MM-DD
-[[ $# -eq 0 ]] || [[ $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && $(date -d "$1" +%F 2>/dev/null) == "$1" ]] || { echo "Expected YYYY-MM-DD (e.g., 2025-09-13)"; exit 1; }
 
 ########################################################################
 log() {
@@ -35,8 +95,8 @@ log() {
 ########################################################################
 
 args=()
-if [[ $# -eq 1 ]]; then
-  args=("$1")
+if [[ ${#edition_date_args[@]} -eq 1 ]]; then
+  args=("${edition_date_args[0]}")
 fi
 
 rmdir "${ECONOMIST_OUTPUT_DIR}"/* 2>/dev/null
@@ -78,8 +138,8 @@ latest_edition="$(
   | head -n1 | sed 's#^#https://www.economist.com#' | sort -u
 )"
 
-if [[ "$#" -eq 1 ]]; then
-  latest_edition=https://www.economist.com/weeklyedition/"$1"
+if [[ ${#edition_date_args[@]} -eq 1 ]]; then
+  latest_edition=https://www.economist.com/weeklyedition/"${edition_date_args[0]}"
 fi
 
 log "latest_edition = $latest_edition"

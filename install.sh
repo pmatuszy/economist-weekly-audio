@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
 # v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
 # v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
 # v. 1.14 - 2026.07.15 - create starter config from example when none exists
@@ -171,7 +172,7 @@ if (( DO_PULL )); then
     fi
 fi
 
-mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f -name 'economist-[0-9]-*.sh' | sort)
+mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f \( -name 'economist-[0-9]-*.sh' -o -name 'economist-script-reinstall.sh' \) | sort)
 
 if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
     echo "No installable scripts found in ${SCRIPTS_DIR}" >&2
