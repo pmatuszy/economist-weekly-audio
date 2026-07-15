@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.10 - 2026.07.15 - config replace: description, paths, then prompt line
 # v. 1.9 - 2026.07.15 - config replace prompt: aligned paths, no one-liner
 # v. 1.8 - 2026.07.15 - offer to replace conf/ config from private repo (20s, default N)
 # v. 1.7 - 2026.07.15 - wrappers economist-*.sh; prompt to remove legacy numbered names
@@ -124,15 +125,13 @@ print_aligned_config_path() {
     printf "%${CONFIG_PATH_TEXT_COL}s%s\n" "" "${base}"
 }
 
-print_config_replace_paths() {
-    local current resolved_private
-
-    current="$(normalize_path "${CONF_FILE}")"
-    resolved_private="$(normalize_path "${PRIVATE_CONF}")"
-
-    echo "Replace installed config with private repo copy?"
-    print_aligned_config_path "current" "${current}"
-    print_aligned_config_path "private" "${resolved_private}"
+print_config_replace_offer() {
+    echo "An economist.local.conf file is already installed in conf/."
+    echo "The installer can overwrite it with the copy from your private repo"
+    echo "(RSS URL, healthcheck, and paths). Waits ${CONFIG_REPLACE_TIMEOUT}s; default is no."
+    echo
+    print_aligned_config_path "current" "${CONF_FILE}"
+    print_aligned_config_path "private" "${PRIVATE_CONF}"
 }
 
 if [[ ! -d "${SCRIPTS_DIR}" ]]; then
@@ -264,7 +263,8 @@ describe_config_plan() {
         echo "  installed:"
         print_aligned_config_path "current" "${CONF_FILE}"
         if [[ -f "${PRIVATE_CONF}" ]]; then
-            echo "  replace offer (${CONFIG_REPLACE_TIMEOUT}s, default no) from:"
+            echo "  If you proceed, the installer may offer to replace it from"
+            echo "  your private repo (${CONFIG_REPLACE_TIMEOUT}s timeout, default no):"
             print_aligned_config_path "private" "${PRIVATE_CONF}"
         fi
         check_config_permissions "${CONF_FILE}"
@@ -302,14 +302,12 @@ install_config_file() {
     mkdir -p "${CONF_DIR}"
 
     if [[ -f "${CONF_FILE}" ]]; then
-        echo "Config:"
-        print_aligned_config_path "current" "${CONF_FILE}"
         check_config_permissions "${CONF_FILE}"
 
         if [[ -f "${PRIVATE_CONF}" ]]; then
             echo
-            print_config_replace_paths
-            read_yes_no_quit "[y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
+            print_config_replace_offer
+            read_yes_no_quit "Replace installed config with private repo copy? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
             case "${REPLY}" in
                 y)
                     check_config_permissions "${PRIVATE_CONF}"
