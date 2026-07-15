@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.10 - clearer English debug labels
 # 2026.07.15 - v. 1.9 - dot _script_header.sh at script top level (fixes banner)
 # 2026.07.15 - v. 1.7 - Ctrl-C cleanup, pipeline summary, improved child step capture
 # v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
@@ -181,11 +182,11 @@ if [[ ${#edition_date_args[@]} -eq 1 ]]; then
     latest_edition=https://www.economist.com/weeklyedition/"${edition_date_args[0]}"
 fi
 
-log "latest_edition = $latest_edition"
+log "Latest edition URL: ${latest_edition}"
 
 edition_directory="${output_dir}/$(echo "${latest_edition}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
 edition_name="$(basename "${edition_directory}")"
-log "edition_directory = $edition_directory"
+log "Edition output directory: ${edition_directory}"
 
 ECONOMIST_PIPELINE_EDITION_URL="${latest_edition}"
 ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
@@ -207,16 +208,16 @@ fi
 mkdir -p "${edition_directory}" 2>/dev/null
 cd "${edition_directory}"
 
-log "working directory: $(pwd)"
+log "Current working directory: $(pwd)"
 
 log_part1="$(run_pipeline_child download "${SCRIPT_DIR}/economist-1-download.sh" "${args[@]}")"
 exit_code=$?
 ECONOMIST_PIPELINE_RC_DOWNLOAD="${exit_code}"
 
-log "output from ${SCRIPT_DIR}/economist-1-download.sh:"
+log "Output from ${SCRIPT_DIR}/economist-1-download.sh:"
 log "$log_part1"
 log ""
-log "exit code from ${SCRIPT_DIR}/economist-1-download.sh = $exit_code"
+log "Exit code from ${SCRIPT_DIR}/economist-1-download.sh: ${exit_code}"
 
 if (( exit_code == 130 )); then
     ECONOMIST_STOPPED_BY_USER=yes
@@ -240,7 +241,7 @@ log_part2="$(run_pipeline_child process "${SCRIPT_DIR}/economist-2-process-editi
 exit_code=$?
 ECONOMIST_PIPELINE_RC_PROCESS="${exit_code}"
 
-log "output from ${SCRIPT_DIR}/economist-2-process-edition.sh:"
+log "Output from ${SCRIPT_DIR}/economist-2-process-edition.sh:"
 log "$log_part2"
 log ""
 

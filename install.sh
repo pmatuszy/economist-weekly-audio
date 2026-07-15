@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.21 - offer removal of obsolete /root/scripts Polish-era copies
 # 2026.07.15 - v. 1.20 - drop _economist-script-header.sh; use github-bin _script_header.sh
 # 2026.07.15 - v. 1.19 - install _economist-run-control.sh; Ctrl-C cleanup and pipeline summary
 # v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
@@ -40,15 +41,21 @@ INSTALL_HEADER_EXTRA_ARGS=()
 LEGACY_WRAPPER_NAMES=(
     "0-economist-runme.sh"
     "1-economist-download.sh"
+    "1-economist-sciagnij.sh"
     "2-economist-process-edition.sh"
+    "2-economist-obrob.sh"
     "3-economist-speedup-loudness.sh"
+    "3-zmien-szybkosc-podbij-glosnosc.sh"
     "4-economist-move-results.sh"
+    "4-wszystko-obrobione-przenies-wyniki.sh"
     "economist-runme.sh"
     "economist-download.sh"
     "economist-process-edition.sh"
     "economist-speedup-loudness.sh"
     "economist-move-results.sh"
 )
+
+LEGACY_SCRIPTS_DIR="${LEGACY_SCRIPTS_DIR:-/root/scripts}"
 
 usage() {
     cat <<EOF
@@ -335,7 +342,7 @@ remove_legacy_wrappers() {
         return 0
     fi
 
-    print_section "Legacy script cleanup"
+    print_section "Legacy script cleanup (bin/)"
     echo "Legacy script names (old naming):"
     for path in "${legacy_paths[@]}"; do
         echo "  ${path}"
@@ -353,6 +360,53 @@ remove_legacy_wrappers() {
             ;;
         *)
             echo "Kept legacy scripts."
+            ;;
+    esac
+}
+
+find_legacy_scripts_dir() {
+    local -n _out="$1"
+    local name path
+
+    _out=()
+    [[ -d "${LEGACY_SCRIPTS_DIR}" ]] || return 0
+
+    for name in "${LEGACY_WRAPPER_NAMES[@]}"; do
+        path="${LEGACY_SCRIPTS_DIR}/${name}"
+        if [[ -f "${path}" ]]; then
+            _out+=("${path}")
+        fi
+    done
+}
+
+remove_legacy_scripts_dir() {
+    local -a legacy_paths=()
+
+    find_legacy_scripts_dir legacy_paths
+    if [[ ${#legacy_paths[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    print_section "Obsolete scripts in ${LEGACY_SCRIPTS_DIR}"
+    echo "Old Polish-era pipeline copies (English scripts are in ${BIN_DIR}):"
+    for path in "${legacy_paths[@]}"; do
+        echo "  ${path}"
+    done
+    echo
+    echo "Do not run these — use: ${BIN_DIR}/economist-0-runme.sh"
+
+    read_yes_no_quit "Remove obsolete scripts from ${LEGACY_SCRIPTS_DIR}? [y/N/q]: "
+    case "${REPLY}" in
+        y)
+            rm -f "${legacy_paths[@]}"
+            echo "Removed ${#legacy_paths[@]} obsolete script(s) from ${LEGACY_SCRIPTS_DIR}."
+            ;;
+        q)
+            echo "Quit."
+            exit 0
+            ;;
+        *)
+            echo "Kept obsolete scripts in ${LEGACY_SCRIPTS_DIR}."
             ;;
     esac
 }
@@ -605,10 +659,19 @@ echo "  _load-config.sh"
 
 legacy_preview=()
 find_legacy_wrappers legacy_preview
+legacy_scripts_preview=()
+find_legacy_scripts_dir legacy_scripts_preview
 if [[ ${#legacy_preview[@]} -gt 0 ]]; then
     echo
-    echo "Legacy script names present (will offer removal after install):"
+    echo "Legacy script names in bin/ (will offer removal after install):"
     for path in "${legacy_preview[@]}"; do
+        echo "  ${path}"
+    done
+fi
+if [[ ${#legacy_scripts_preview[@]} -gt 0 ]]; then
+    echo
+    echo "Obsolete scripts in ${LEGACY_SCRIPTS_DIR} (Polish-era copies; will offer removal):"
+    for path in "${legacy_scripts_preview[@]}"; do
         echo "  ${path}"
     done
 fi
@@ -642,6 +705,8 @@ install_config_file
 install_bin_scripts
 
 remove_legacy_wrappers
+
+remove_legacy_scripts_dir
 
 print_section "Install complete"
 echo "Run the pipeline with:"
