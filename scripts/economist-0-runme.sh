@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.14 - show-available confirm pick; force reprocess when confirmed
 # 2026.07.15 - v. 1.13 - --show-available lists verified RSS editions and interactive pick
 # 2026.07.15 - v. 1.12 - pipeline exit records finish time before summary
 # 2026.07.15 - v. 1.11 - align debug label values in a fixed column
@@ -107,13 +108,15 @@ if (( SHOW_AVAILABLE )); then
         exit 1
     fi
     picked_edition=""
-    if ! economist_show_and_pick_available_editions picked_edition; then
+    force_reprocess=0
+    if ! economist_show_and_pick_available_editions picked_edition force_reprocess; then
         exit 1
     fi
     if [[ -z "${picked_edition}" ]]; then
         exit 0
     fi
     edition_date_args=("${picked_edition}")
+    ECONOMIST_FORCE_REPROCESS="${force_reprocess}"
 fi
 
 economist_run_control_init pipeline
@@ -225,16 +228,21 @@ ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
 ECONOMIST_PIPELINE_EDITION_NAME="${edition_name}"
 
 if [[ -d "${edition_directory}" && $(/bin/ls -A "${edition_directory}") ]]; then
-    log_part1=$(
-        echo
-        echo "Directory ${edition_directory} exists and is not empty"
-        echo "Will not download this edition again..."
-        echo "... exiting."
-    )
-    economist_set_run_step already_exists
-    hc_ping "" "${log_part1}"
-    log "$log_part1"
-    economist_exit_pipeline 0
+    if [[ "${ECONOMIST_FORCE_REPROCESS:-0}" == 1 ]]; then
+        echo "Force reprocess — removing existing edition output and work files..."
+        economist_force_reprocess_edition "${edition_directory}" "${work_dir}"
+    else
+        log_part1=$(
+            echo
+            echo "Directory ${edition_directory} exists and is not empty"
+            echo "Will not download this edition again..."
+            echo "... exiting."
+        )
+        economist_set_run_step already_exists
+        hc_ping "" "${log_part1}"
+        log "$log_part1"
+        economist_exit_pipeline 0
+    fi
 fi
 
 mkdir -p "${edition_directory}" 2>/dev/null

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.17 - show-available: confirm pick; N relists; force reprocess
 # 2026.07.16 - v. 2.15 - show-available list: oldest first, newest at bottom
 # 2026.07.16 - v. 2.14 - show-available pick: single-line prompt ending with ": "
 # 2026.07.16 - v. 2.13 - show-available pick: accept leading zeros (e.g. 000010 → 10)
@@ -270,17 +271,37 @@ economist_local_edition_status() {
     fi
 }
 
+economist_read_tty_line() {
+    local prompt="$1"
+    local -n _line_ref="$2"
+
+    if [[ -r /dev/tty ]]; then
+        read -r -p "${prompt}" _line_ref </dev/tty
+    else
+        read -r -p "${prompt}" _line_ref
+    fi
+}
+
+economist_force_reprocess_edition() {
+    local edition_dir="$1" work_dir="$2"
+
+    [[ -n "${edition_dir}" && -d "${edition_dir}" ]] && rm -rf "${edition_dir}"
+    economist_cleanup_work_dir "${work_dir}" 1
+}
+
 economist_show_and_pick_available_editions() {
     local -n _picked_iso_ref="$1"
+    local -n _force_reprocess_ref="$2"
     local rss_file="" item_count=0 pos=0 edition_iso="" title="" url="" local_status=""
-    local edition_dir="" choice="" idx=0 dots_pid=0 verified_count=0
-    local issue_no=""
+    local edition_dir="" choice="" idx=0 dots_pid=0 verified_count=0 sel_idx=0
+    local issue_no="" confirm="" confirm_prompt=""
     local -a pick_isos=()
     local -a pick_titles=()
     local -a pick_local=()
     local -a pick_issues=()
 
     _picked_iso_ref=""
+    _force_reprocess_ref=0
 
     rss_file="$(mktemp)"
     trap 'rm -f "${rss_file}"' RETURN
@@ -357,51 +378,97 @@ economist_show_and_pick_available_editions() {
         pick_issues=("${_rev_issues[@]}")
     fi
 
-    echo
-    echo "Verified editions (oldest at top, newest at bottom):"
-    printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
-    printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
-    for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
-        printf '  %-3s %-12s %-36s %-18s %s\n' \
-            "$((idx + 1))" \
-            "${pick_isos[idx]}" \
-            "${pick_titles[idx]:0:36}" \
-            "${pick_local[idx]:0:18}" \
-            "${pick_issues[idx]}"
-    done
-    echo
-
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
+        echo
+        echo "Verified editions (oldest at top, newest at bottom):"
+        printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
+        printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
+        for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
+            printf '  %-3s %-12s %-36s %-18s %s\n' \
+                "$((idx + 1))" \
+                "${pick_isos[idx]}" \
+                "${pick_titles[idx]:0:36}" \
+                "${pick_local[idx]:0:18}" \
+                "${pick_issues[idx]}"
+        done
+        echo
         echo "Non-interactive session — listing only (no pick)."
         return 0
     fi
 
-    local pick_prompt="To download: enter 1–${#pick_isos[@]} and press Enter, or Enter/Q to quit: "
+    pick_again: while true; do
+        echo
+        echo "Verified editions (oldest at top, newest at bottom):"
+        printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
+        printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
+        for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
+            printf '  %-3s %-12s %-36s %-18s %s\n' \
+                "$((idx + 1))" \
+                "${pick_isos[idx]}" \
+                "${pick_titles[idx]:0:36}" \
+                "${pick_local[idx]:0:18}" \
+                "${pick_issues[idx]}"
+        done
+        echo
 
-    while true; do
-        if [[ -r /dev/tty ]]; then
-            read -r -p "${pick_prompt}" choice </dev/tty
+        while true; do
+            economist_read_tty_line "To download: enter 1–${#pick_isos[@]} and press Enter, or Enter/Q to quit: " choice
+
+            case "${choice}" in
+                q|Q|'')
+                    return 0
+                    ;;
+                *[!0-9]*)
+                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
+                    ;;
+                *)
+                    choice=$((10#${choice}))
+                    if (( choice >= 1 && choice <= ${#pick_isos[@]} )); then
+                        sel_idx=$((choice - 1))
+                        break
+                    fi
+                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
+                    ;;
+            esac
+        done
+
+        echo
+        printf '  %-12s %s\n' "Edition:" "${pick_isos[sel_idx]}"
+        printf '  %-12s %s\n' "Title:" "${pick_titles[sel_idx]}"
+        printf '  %-12s %s\n' "Issue:" "${pick_issues[sel_idx]}"
+        printf '  %-12s %s\n' "Local:" "${pick_local[sel_idx]}"
+        echo
+
+        if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
+            confirm_prompt="Reprocess this edition? [Y/n/q]: "
         else
-            read -r -p "${pick_prompt}" choice
+            confirm_prompt="Download this edition? [Y/n/q]: "
         fi
 
-        case "${choice}" in
-            q|Q|'')
-                return 0
-                ;;
-            *[!0-9]*)
-                echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
-                ;;
-            *)
-                choice=$((10#${choice}))
-                if (( choice >= 1 && choice <= ${#pick_isos[@]} )); then
-                    _picked_iso_ref="${pick_isos[choice - 1]}"
-                    echo "Selected edition: ${_picked_iso_ref} (issue ${pick_issues[choice - 1]})"
+        while true; do
+            economist_read_tty_line "${confirm_prompt}" confirm
+
+            case "${confirm}" in
+                q|Q)
                     return 0
-                fi
-                echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
-                ;;
-        esac
+                    ;;
+                n|N)
+                    continue pick_again
+                    ;;
+                ''|y|Y)
+                    _picked_iso_ref="${pick_isos[sel_idx]}"
+                    if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
+                        _force_reprocess_ref=1
+                    else
+                        _force_reprocess_ref=0
+                    fi
+                    return 0
+                    ;;
+                *)
+                    echo "Enter Y to confirm, N to show the list again, or Q to quit."
+                    ;;
+            esac
+        done
     done
 }
 
