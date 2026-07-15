@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.22 - offer to comment out obsolete economist cron lines and add new block
 # 2026.07.15 - v. 1.21 - offer removal of obsolete /root/scripts Polish-era copies
 # 2026.07.15 - v. 1.20 - drop _economist-script-header.sh; use github-bin _script_header.sh
 # 2026.07.15 - v. 1.19 - install _economist-run-control.sh; Ctrl-C cleanup and pipeline summary
@@ -576,58 +577,136 @@ install_bin_scripts() {
 }
 
 print_crontab_hint() {
-    local run_script="${BIN_DIR}/economist-0-runme.sh"
-    local lock_file="${BASE_DIR}/var/lock/economist-runme.lock"
-    local log_file="${BASE_DIR}/var/log/economist-runme.log"
-    local base_dir="/worek/economist/theEconomist"
-    local output_dir archive_dir
-    local cron_run flock_note flock_vars
+    print_section "Crontab hint — add with: crontab -e"
+    resolve_flock_for_cron
+    build_economist_cron_paths
+    echo_economist_cron_block "hint"
+    echo "${SECTION_RULE}"
+    echo
+}
 
-    output_dir="${base_dir}/_obrobione"
-    archive_dir="${base_dir}/archive"
+cron_line_core_content() {
+    local line="$1"
+
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    if [[ "${line}" =~ ^[[:space:]]*# ]]; then
+        line="${line#\#}"
+        line="${line#"${line%%[![:space:]]*}"}"
+    fi
+    printf '%s' "${line}"
+}
+
+cron_line_is_obsolete() {
+    local core="$1"
+
+    core="$(cron_line_core_content "$1")"
+    [[ -n "${core}" ]] || return 1
+
+    if [[ "${core}" == *"economist-0-runme.sh"* ]]; then
+        return 1
+    fi
+
+    if [[ "${core}" == *"/root/scripts/"* ]] && [[ "${core}" == *[Ee]conomist* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"0-economist-runme"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"1-economist-sciagnij"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"2-economist-obrob"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"3-zmien-szybkosc-podbij-glosnosc"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"4-wszystko-obrobione"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/0-economist-runme"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/1-economist-download"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/2-economist-process-edition"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/3-economist-speedup-loudness"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/4-economist-move-results"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/economist-runme.sh"* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *"/bin/economist-download.sh"* ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+build_economist_cron_paths() {
+    ECON_CRON_RUN_SCRIPT="${BIN_DIR}/economist-0-runme.sh"
+    ECON_CRON_LOCK_FILE="${BASE_DIR}/var/lock/economist-runme.lock"
+    ECON_CRON_LOG_FILE="${BASE_DIR}/var/log/economist-runme.log"
+    ECON_CRON_BASE_DIR="/worek/economist/theEconomist"
+    ECON_CRON_OUTPUT_DIR="${ECON_CRON_BASE_DIR}/_obrobione"
+    ECON_CRON_ARCHIVE_DIR="${ECON_CRON_BASE_DIR}/archive"
 
     if [[ -f "${CONF_FILE}" ]]; then
         # shellcheck disable=SC1090
         source "${CONF_FILE}" 2>/dev/null || true
-        base_dir="${ECONOMIST_BASE_DIR:-${base_dir}}"
-        output_dir="${ECONOMIST_OUTPUT_DIR:-${output_dir}}"
-        archive_dir="${base_dir}/archive"
+        ECON_CRON_BASE_DIR="${ECONOMIST_BASE_DIR:-${ECON_CRON_BASE_DIR}}"
+        ECON_CRON_OUTPUT_DIR="${ECONOMIST_OUTPUT_DIR:-${ECON_CRON_OUTPUT_DIR}}"
+        ECON_CRON_ARCHIVE_DIR="${ECON_CRON_BASE_DIR}/archive"
     fi
 
     mkdir -p "${BASE_DIR}/var/lock" "${BASE_DIR}/var/log" 2>/dev/null || true
 
-    print_section "Crontab hint — add with: crontab -e"
-
-    resolve_flock_for_cron
-
     if (( USE_FLOCK_IN_CRON )); then
-        cron_run="${FLOCK_BIN} -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN}"
-        flock_vars="ECONOMIST_LOCK=${lock_file}"
-        flock_note="# Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path."
+        ECON_CRON_RUN_CMD="${FLOCK_BIN} -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN}"
+        ECON_CRON_LOCK_VAR="ECONOMIST_LOCK=${ECON_CRON_LOCK_FILE}"
+        ECON_CRON_FLOCK_NOTE="# Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path."
     else
-        cron_run="\${ECONOMIST_RUN}"
-        flock_vars="# ECONOMIST_LOCK=  (flock not installed — cron runs without overlap lock)"
-        flock_note="# flock not installed — install util-linux for overlap protection."
+        ECON_CRON_RUN_CMD="\${ECONOMIST_RUN}"
+        ECON_CRON_LOCK_VAR="# ECONOMIST_LOCK=  (flock not installed — cron runs without overlap lock)"
+        ECON_CRON_FLOCK_NOTE="# flock not installed — install util-linux for overlap protection."
+    fi
+}
+
+echo_economist_cron_block() {
+    local mode="${1:-hint}"
+    local header_comment=""
+
+    if [[ "${mode}" == "migrate" ]]; then
+        header_comment="# Economist weekly audio — new cron block added by install.sh on $(date '+%Y.%m.%d %H:%M:%S')"
+    else
+        header_comment="# Economist weekly audio — paths for this install"
     fi
 
     cat <<EOF
-# Economist weekly audio — paths for this install
+${header_comment}
 # Full example: ${REPO_ROOT}/crontab.example
 
 PROFILE_LOCATION_DIR=${BASE_DIR}
 ECONOMIST_BIN=${BIN_DIR}
-ECONOMIST_RUN=${run_script}
-${flock_vars}
-ECONOMIST_LOG=${log_file}
-ECONOMIST_OUTPUT=${output_dir}
-ECONOMIST_ARCHIVE=${archive_dir}
+ECONOMIST_RUN=${ECON_CRON_RUN_SCRIPT}
+${ECON_CRON_LOCK_VAR}
+ECONOMIST_LOG=${ECON_CRON_LOG_FILE}
+ECONOMIST_OUTPUT=${ECON_CRON_OUTPUT_DIR}
+ECONOMIST_ARCHIVE=${ECON_CRON_ARCHIVE_DIR}
 
 # Thursday evening (edition usually available)
-30 21-23 * * 4 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
+30 21-23 * * 4 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
 
 # Retry early morning and daytime (Mon–Wed, Fri–Sun)
-15 0-4  * * 0-3,5,6 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
-15 7-22 * * 0-3,5,6 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
+15 0-4  * * 0-3,5,6 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
+15 7-22 * * 0-3,5,6 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
 
 # Move processed editions to archive (Thursday night)
 0 2 * * 4 /bin/mv -f \${ECONOMIST_OUTPUT}/[0-9]* \${ECONOMIST_ARCHIVE}/ 2>/dev/null
@@ -635,11 +714,103 @@ ECONOMIST_ARCHIVE=${archive_dir}
 # Remove empty output subdirs (Wednesday)
 0 4 * * 3 /usr/bin/find \${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
 
-${flock_note}
-# Replace obsolete cron lines (e.g. /root/scripts/0-economist-runme.sh).
+${ECON_CRON_FLOCK_NOTE}
 EOF
-    echo "${SECTION_RULE}"
+}
+
+offer_crontab_obsolete_migration() {
+    local current_crontab="" tmp="" stamp="" line=""
+    local -a kept_lines=() obsolete_lines=()
+    local has_new_cron=0
+
+    if ! command -v crontab >/dev/null 2>&1; then
+        echo "crontab command not found — skipping cron migration." >&2
+        return 0
+    fi
+
+    current_crontab="$(crontab -l 2>/dev/null || true)"
+    if [[ -z "${current_crontab}" ]]; then
+        return 0
+    fi
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        if cron_line_is_obsolete "${line}"; then
+            obsolete_lines+=("${line}")
+        else
+            kept_lines+=("${line}")
+        fi
+    done <<< "${current_crontab}"
+
+    if [[ ${#obsolete_lines[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "${current_crontab}" == *"${BIN_DIR}/economist-0-runme.sh"* ]]; then
+        has_new_cron=1
+    fi
+
+    print_section "Obsolete economist cron entries"
+    echo "Found ${#obsolete_lines[@]} obsolete line(s) in your crontab:"
+    for line in "${obsolete_lines[@]}"; do
+        echo "  ${line}"
+    done
     echo
+    if (( has_new_cron )); then
+        echo "Your crontab already contains ${BIN_DIR}/economist-0-runme.sh"
+        echo "Obsolete lines will be commented out together; no new block will be added."
+    else
+        echo "Obsolete lines will be commented out and replaced with a new economist block."
+    fi
+    echo
+
+    read_yes_no_quit "Update crontab (comment obsolete lines, add new block if needed)? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
+    case "${REPLY}" in
+        y) ;;
+        q)
+            echo "Quit."
+            exit 0
+            ;;
+        *)
+            echo "Kept crontab unchanged."
+            return 0
+            ;;
+    esac
+
+    build_economist_cron_paths
+    stamp="$(date '+%Y.%m.%d %H:%M:%S')"
+    tmp="$(mktemp)"
+
+    {
+        if [[ ${#kept_lines[@]} -gt 0 ]]; then
+            printf '%s\n' "${kept_lines[@]}"
+            echo
+        fi
+        echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        for line in "${obsolete_lines[@]}"; do
+            if [[ "${line}" =~ ^[[:space:]]*# ]]; then
+                printf '%s\n' "${line}"
+            else
+                printf '# %s\n' "${line}"
+            fi
+        done
+        echo "# --- end obsolete economist cron lines ---"
+        echo
+        if (( has_new_cron == 0 )); then
+            echo_economist_cron_block migrate
+        fi
+    } > "${tmp}"
+
+    if crontab "${tmp}"; then
+        echo "Crontab updated."
+        if (( has_new_cron == 0 )); then
+            echo "Added new economist cron block for ${ECON_CRON_RUN_SCRIPT}"
+        fi
+    else
+        echo "Failed to update crontab. Temp file left at: ${tmp}" >&2
+        return 1
+    fi
+
+    rm -f "${tmp}"
 }
 
 print_section "Economist weekly audio — install"
@@ -714,3 +885,4 @@ echo "  ${BIN_DIR}/economist-0-runme.sh"
 echo
 
 print_crontab_hint
+offer_crontab_obsolete_migration
