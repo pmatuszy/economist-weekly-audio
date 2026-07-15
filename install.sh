@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.32 - detect outdated economist cron blocks (flock wrapper, old paths)
 # 2026.07.15 - v. 1.31 - cron runs script directly; flock is acquired inside scripts
 # 2026.07.15 - v. 1.30 - show installed vs repository script versions in install plan
 # 2026.07.15 - v. 1.29 - merge run-control into _load-config.sh; drop separate helper file
@@ -762,7 +763,12 @@ print_crontab_hint() {
         current_crontab="$(crontab -l 2>/dev/null || true)"
         if [[ -n "${current_crontab}" ]] && crontab_has_active_economist_jobs "${current_crontab}"; then
             print_section "Crontab"
-            echo "Active economist-0-runme.sh jobs already in crontab — hint skipped."
+            if crontab_has_outdated_economist_cron "${current_crontab}"; then
+                echo "Your economist cron block is outdated (external flock, ECONOMIST_LOCK, or old paths)."
+                echo "The installer will offer to replace it after setup — accept the crontab migration prompt."
+            else
+                echo "Active economist-0-runme.sh jobs already in crontab — hint skipped."
+            fi
             echo "${SECTION_RULE}"
             echo
             return 0
@@ -847,6 +853,126 @@ cron_line_is_obsolete() {
     fi
 
     return 1
+}
+
+crontab_active_line_is_outdated() {
+    local line="$1" trimmed core
+
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "${trimmed}" ]] || return 1
+    [[ "${trimmed}" =~ ^# ]] && return 1
+
+    if cron_line_is_obsolete "${line}"; then
+        return 0
+    fi
+
+    core="$(cron_line_core_content "$line")"
+
+    if [[ "${trimmed}" == ECONOMIST_LOCK=* ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" == ECONOMIST_LOG=* ]] && [[ "${trimmed}" != *'/var/log/economist-runme.log'* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *flock* ]] && [[ "${core}" == *'${ECONOMIST_RUN}'* || "${core}" == *economist-0-runme.sh* ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+crontab_has_outdated_economist_cron() {
+    local crontab_content="$1" line trimmed
+
+    [[ -n "${crontab_content}" ]] || return 1
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        if crontab_active_line_is_outdated "${line}"; then
+            return 0
+        fi
+    done <<< "${crontab_content}"
+
+    return 1
+}
+
+crontab_line_belongs_to_economist_block() {
+    local line="$1" trimmed
+
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "${trimmed}" ]] || return 1
+
+    if [[ "${trimmed}" =~ ^#[[:space:]]*Economist[[:space:]]+weekly[[:space:]]+audio ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^#[[:space:]]*Full[[:space:]]+example:.*economist ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^PROFILE_LOCATION_DIR= ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^ECONOMIST_ ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^#[[:space:]]*(Thursday|Retry|Move|Remove) ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^#[[:space:]]*Use[[:space:]]+a[[:space:]]+separate[[:space:]]+lock ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^#[[:space:]]*Overlap[[:space:]]+protection ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^[0-9,@*/[:space:]-]+.*economist-0-runme\.sh ]]; then
+        return 0
+    fi
+    if [[ "${trimmed}" =~ ^[0-9,@*/[:space:]-]+.*\$\{ECONOMIST_ ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+split_crontab_economist_blocks() {
+    local crontab_content="$1"
+    local -n _kept="$2"
+    local -n _refresh="$3"
+    local line
+    local -a block_buf=()
+    local in_block=0 block_outdated=0
+
+    _kept=()
+    _refresh=()
+
+    flush_economist_block() {
+        if (( in_block == 0 )); then
+            return 0
+        fi
+        if (( block_outdated )); then
+            _refresh+=("${block_buf[@]}")
+        else
+            _kept+=("${block_buf[@]}")
+        fi
+        block_buf=()
+        in_block=0
+        block_outdated=0
+    }
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        if crontab_line_belongs_to_economist_block "${line}"; then
+            in_block=1
+            block_buf+=("${line}")
+            if crontab_active_line_is_outdated "${line}"; then
+                block_outdated=1
+            fi
+        elif [[ -z "${line//[[:space:]]/}" && in_block -eq 1 ]]; then
+            block_buf+=("${line}")
+        else
+            flush_economist_block
+            _kept+=("${line}")
+        fi
+    done <<< "${crontab_content}"
+
+    flush_economist_block
 }
 
 crontab_has_active_economist_jobs() {
@@ -937,8 +1063,9 @@ EOF
 
 offer_crontab_obsolete_migration() {
     local current_crontab="" tmp="" stamp="" line=""
-    local -a kept_lines=() obsolete_lines=()
-    local has_new_cron=0
+    local -a kept_lines=() obsolete_lines=() refresh_lines=() final_kept=()
+    local has_new_cron=0 add_new_block=0
+    local outdated_block=0
 
     if ! command -v crontab >/dev/null 2>&1; then
         echo "crontab command not found — skipping cron migration." >&2
@@ -950,42 +1077,61 @@ offer_crontab_obsolete_migration() {
         return 0
     fi
 
-    while IFS= read -r line || [[ -n "${line}" ]]; do
+    split_crontab_economist_blocks "${current_crontab}" kept_lines refresh_lines
+
+    if [[ ${#refresh_lines[@]} -gt 0 ]]; then
+        outdated_block=1
+        obsolete_lines+=("${refresh_lines[@]}")
+    fi
+
+    for line in "${kept_lines[@]}"; do
         if cron_line_is_obsolete "${line}"; then
             obsolete_lines+=("${line}")
         else
-            kept_lines+=("${line}")
+            final_kept+=("${line}")
         fi
-    done <<< "${current_crontab}"
+    done
+    kept_lines=("${final_kept[@]}")
 
     if [[ ${#obsolete_lines[@]} -eq 0 ]]; then
         return 0
     fi
 
-    if crontab_has_active_economist_jobs "${current_crontab}"; then
+    if (( outdated_block )); then
+        add_new_block=1
+    elif crontab_has_active_economist_jobs "${current_crontab}"; then
         has_new_cron=1
-        echo "Crontab already has active economist-0-runme.sh jobs — will not add a new block."
-        echo "Only active (uncommented) obsolete lines will be commented out."
-        echo
-    elif [[ "${current_crontab}" == *"${BIN_DIR}/economist-0-runme.sh"* ]]; then
-        has_new_cron=1
+        add_new_block=0
+    else
+        add_new_block=1
     fi
 
-    print_section "Obsolete economist cron entries (active lines only)"
-    echo "Found ${#obsolete_lines[@]} obsolete line(s) in your crontab:"
+    if (( outdated_block )); then
+        print_section "Outdated economist cron block"
+        echo "Your crontab uses an old economist format, for example:"
+        echo "  - /usr/bin/flock wrapping \${ECONOMIST_RUN}"
+        echo "  - ECONOMIST_LOCK= in crontab (lock is now inside the script)"
+        echo "  - ECONOMIST_LOG under /root/var/log instead of /var/log"
+        echo
+        echo "The whole economist block will be commented out and replaced."
+    else
+        print_section "Obsolete economist cron entries (active lines only)"
+        echo "Found ${#obsolete_lines[@]} obsolete line(s) in your crontab:"
+    fi
+
     for line in "${obsolete_lines[@]}"; do
         echo "  ${line}"
     done
     echo
-    if (( has_new_cron )); then
-        echo "Your crontab already has current economist-0-runme.sh jobs."
+
+    if (( add_new_block )); then
+        echo "A new economist cron block will be appended after commenting the old one."
+    elif (( has_new_cron )); then
         echo "Active obsolete lines will be commented out; no new block will be added."
-    else
-        echo "Active obsolete lines will be commented out and replaced with a new economist block."
     fi
     echo
 
-    read_yes_no_quit "Update crontab (comment obsolete lines, add new block if needed)? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
+    read_yes_no_quit "Update crontab (comment old lines, add new block if needed)? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
     case "${REPLY}" in
         y) ;;
         q)
@@ -1007,7 +1153,11 @@ offer_crontab_obsolete_migration() {
             printf '%s\n' "${kept_lines[@]}"
             echo
         fi
-        echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        if (( outdated_block )); then
+            echo "# --- economist-weekly-audio: outdated cron block commented out by install.sh on ${stamp} ---"
+        else
+            echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        fi
         for line in "${obsolete_lines[@]}"; do
             if [[ "${line}" =~ ^[[:space:]]*# ]]; then
                 printf '%s\n' "${line}"
@@ -1015,9 +1165,13 @@ offer_crontab_obsolete_migration() {
                 printf '# %s\n' "${line}"
             fi
         done
-        echo "# --- end obsolete economist cron lines ---"
+        if (( outdated_block )); then
+            echo "# --- end outdated economist cron block ---"
+        else
+            echo "# --- end obsolete economist cron lines ---"
+        fi
         echo
-        if (( has_new_cron == 0 )); then
+        if (( add_new_block )); then
             echo_economist_cron_block migrate
         fi
     } > "${tmp}"
@@ -1026,8 +1180,16 @@ offer_crontab_obsolete_migration() {
         echo "Crontab updated."
         echo
 
-        print_section "Crontab — old section (now commented out)"
-        echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        if (( outdated_block )); then
+            print_section "Crontab — old block (now commented out)"
+        else
+            print_section "Crontab — old section (now commented out)"
+        fi
+        if (( outdated_block )); then
+            echo "# --- economist-weekly-audio: outdated cron block commented out by install.sh on ${stamp} ---"
+        else
+            echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        fi
         for line in "${obsolete_lines[@]}"; do
             if [[ "${line}" =~ ^[[:space:]]*# ]]; then
                 echo "${line}"
@@ -1035,10 +1197,14 @@ offer_crontab_obsolete_migration() {
                 echo "# ${line}"
             fi
         done
-        echo "# --- end obsolete economist cron lines ---"
+        if (( outdated_block )); then
+            echo "# --- end outdated economist cron block ---"
+        else
+            echo "# --- end obsolete economist cron lines ---"
+        fi
         echo
 
-        if (( has_new_cron == 0 )); then
+        if (( add_new_block )); then
             print_section "Crontab — new section added"
             echo_economist_cron_block migrate
         else
