@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.10 - show-available table: Issue column (RSS feed position)
 # 2026.07.15 - v. 2.9 - show-available: progress dots; Enter defaults to quit
 # 2026.07.15 - v. 2.8 - RSS list/verify helpers; interactive --show-available picker
 # 2026.07.15 - v. 2.7 - pipeline step exit codes: N/A when stage not reached
@@ -314,14 +315,15 @@ economist_show_and_pick_available_editions() {
 
     echo
     echo "Verified editions (RSS item → Saturday edition date):"
-    printf '  %-3s %-12s %-40s %s\n' "#" "Edition" "Title" "Local"
-    printf '  %-3s %-12s %-40s %s\n' "---" "--------" "-----" "-----"
+    printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
+    printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
     for (( idx = 0; idx < ${#pick_positions[@]}; ++idx )); do
-        printf '  %-3s %-12s %-40s %s\n' \
+        printf '  %-3s %-12s %-36s %-18s %s\n' \
             "$((idx + 1))" \
             "${pick_isos[idx]}" \
-            "${pick_titles[idx]:0:40}" \
-            "${pick_local[idx]}"
+            "${pick_titles[idx]:0:36}" \
+            "${pick_local[idx]:0:18}" \
+            "${pick_positions[idx]}"
     done
     echo
 
