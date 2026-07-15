@@ -16,8 +16,8 @@
 # Splits chapters, embeds artwork, renames files, and archives the original MP3.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
+# shellcheck source=_load-config.sh
+source "${SCRIPT_DIR}/_load-config.sh"
 _economist_header_extra=()
 if ! tty >/dev/null 2>&1; then
     _economist_header_extra=(NO_STARTUP_DELAY)
@@ -35,8 +35,6 @@ else
 fi
 unset _economist_header_file _economist_header_extra
 
-# shellcheck source=_load-config.sh
-source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
 economist_run_control_init step

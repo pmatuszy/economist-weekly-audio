@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.29 - merge run-control into _load-config.sh; drop separate helper file
 # 2026.07.15 - v. 1.28 - ECONOMIST_LOCK defaults to /var/lock/economist-runme.lock
 # 2026.07.15 - v. 1.27 - ECONOMIST_LOG defaults to /var/log/economist-runme.log
 # 2026.07.15 - v. 1.26 - skip crontab hint when active economist jobs already exist
@@ -127,8 +128,8 @@ if ! tty >/dev/null 2>&1; then
     INSTALL_HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-# shellcheck source=scripts/_economist-run-control.sh
-source "${SCRIPTS_DIR}/_economist-run-control.sh"
+# shellcheck source=scripts/_load-config.sh
+source "${SCRIPTS_DIR}/_load-config.sh"
 _economist_header_file="$(economist_find_script_header_file)" || true
 if [[ -n "${_economist_header_file}" ]]; then
     if [[ ${#INSTALL_HEADER_EXTRA_ARGS[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then
@@ -575,11 +576,7 @@ install_bin_scripts() {
     cp "${SCRIPTS_DIR}/_load-config.sh" "${BIN_DIR}/_load-config.sh"
     chmod 755 "${BIN_DIR}/_load-config.sh"
     echo "Installed ${BIN_DIR}/_load-config.sh"
-
-    cp "${SCRIPTS_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-run-control.sh"
-    chmod 755 "${BIN_DIR}/_economist-run-control.sh"
-    echo "Installed ${BIN_DIR}/_economist-run-control.sh"
-    rm -f "${BIN_DIR}/_economist-script-header.sh"
+    rm -f "${BIN_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-script-header.sh"
 }
 
 print_crontab_hint() {

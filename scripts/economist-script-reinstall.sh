@@ -76,8 +76,8 @@ if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
 fi
 
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
+# shellcheck source=_load-config.sh
+source "${SCRIPT_DIR}/_load-config.sh"
 _economist_header_file="$(economist_find_script_header_file)" || true
 if [[ -n "${_economist_header_file}" ]]; then
     if [[ ${#HEADER_EXTRA_ARGS[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then

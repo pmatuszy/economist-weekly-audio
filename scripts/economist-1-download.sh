@@ -13,8 +13,8 @@
 # Downloads the weekly Economist MP3 from the personal RSS feed.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_economist-run-control.sh
-source "${SCRIPT_DIR}/_economist-run-control.sh"
+# shellcheck source=_load-config.sh
+source "${SCRIPT_DIR}/_load-config.sh"
 _economist_header_extra=()
 if ! tty >/dev/null 2>&1; then
     _economist_header_extra=(NO_STARTUP_DELAY)
@@ -35,8 +35,6 @@ unset _economist_header_file _economist_header_extra
 set -euo pipefail
 LC_ALL=C
 
-# shellcheck source=_load-config.sh
-source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 require_economist_rss_url
 
