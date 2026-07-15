@@ -10,8 +10,8 @@
 PROFILE_LOCATION_DIR=/root
 ECONOMIST_BIN=/root/bin
 ECONOMIST_RUN=/root/bin/economist-0-runme.sh
-ECONOMIST_LOCK=/root/var/lock/economist-runme.lock
-ECONOMIST_LOG=/root/var/log/economist-runme.log
+ECONOMIST_LOCK=/var/lock/economist-runme.lock
+ECONOMIST_LOG=/var/log/economist-runme.log
 ECONOMIST_OUTPUT=/worek/economist/theEconomist/_obrobione
 ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
 

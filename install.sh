@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.28 - ECONOMIST_LOCK defaults to /var/lock/economist-runme.lock
+# 2026.07.15 - v. 1.27 - ECONOMIST_LOG defaults to /var/log/economist-runme.log
+# 2026.07.15 - v. 1.26 - skip crontab hint when active economist jobs already exist
 # 2026.07.15 - v. 1.25 - skip cron migration when active economist-0-runme jobs already exist
 # 2026.07.15 - v. 1.24 - ignore already-commented cron lines when detecting obsolete entries
 # 2026.07.15 - v. 1.23 - after cron migration show old (commented) and new sections
@@ -580,6 +583,19 @@ install_bin_scripts() {
 }
 
 print_crontab_hint() {
+    local current_crontab=""
+
+    if command -v crontab >/dev/null 2>&1; then
+        current_crontab="$(crontab -l 2>/dev/null || true)"
+        if [[ -n "${current_crontab}" ]] && crontab_has_active_economist_jobs "${current_crontab}"; then
+            print_section "Crontab"
+            echo "Active economist-0-runme.sh jobs already in crontab — hint skipped."
+            echo "${SECTION_RULE}"
+            echo
+            return 0
+        fi
+    fi
+
     print_section "Crontab hint — add with: crontab -e"
     resolve_flock_for_cron
     build_economist_cron_paths
@@ -688,8 +704,8 @@ crontab_has_active_economist_jobs() {
 
 build_economist_cron_paths() {
     ECON_CRON_RUN_SCRIPT="${BIN_DIR}/economist-0-runme.sh"
-    ECON_CRON_LOCK_FILE="${BASE_DIR}/var/lock/economist-runme.lock"
-    ECON_CRON_LOG_FILE="${BASE_DIR}/var/log/economist-runme.log"
+    ECON_CRON_LOCK_FILE="/var/lock/economist-runme.lock"
+    ECON_CRON_LOG_FILE="/var/log/economist-runme.log"
     ECON_CRON_BASE_DIR="/worek/economist/theEconomist"
     ECON_CRON_OUTPUT_DIR="${ECON_CRON_BASE_DIR}/_obrobione"
     ECON_CRON_ARCHIVE_DIR="${ECON_CRON_BASE_DIR}/archive"
@@ -702,7 +718,7 @@ build_economist_cron_paths() {
         ECON_CRON_ARCHIVE_DIR="${ECON_CRON_BASE_DIR}/archive"
     fi
 
-    mkdir -p "${BASE_DIR}/var/lock" "${BASE_DIR}/var/log" 2>/dev/null || true
+    mkdir -p "/var/lock" "/var/log" 2>/dev/null || true
 
     if (( USE_FLOCK_IN_CRON )); then
         ECON_CRON_RUN_CMD="${FLOCK_BIN} -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN}"
