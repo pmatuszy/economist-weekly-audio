@@ -784,10 +784,6 @@ offer_crontab_obsolete_migration() {
     if crontab_has_active_economist_jobs "${current_crontab}"; then
         has_new_cron=1
         echo "Crontab already has active economist-0-runme.sh jobs — will not add a new block."
-        echo
-        if [[ ${#obsolete_lines[@]} -eq 0 ]]; then
-            return 0
-        fi
         echo "Only active (uncommented) obsolete lines will be commented out."
         echo
     elif [[ "${current_crontab}" == *"${BIN_DIR}/economist-0-runme.sh"* ]]; then
