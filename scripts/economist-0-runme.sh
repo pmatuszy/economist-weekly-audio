@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# v. 1.4 - 2026.07.15 - call economist-1..4-*.sh child scripts
-# v. 1.4 - 2026.07.15 - renamed to economist-0-runme.sh
+# v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
 # v. 1.1 - 2026.07.15 - added script description header
 # v. 1.0 - 2026.06.19 - runtime messages translated to English
