@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.3 - clearer pipeline summary labels and step exit codes
 # 2026.07.15 - v. 2.2 - quiet rollback: remove only empty output placeholders
 # 2026.07.15 - v. 2.1 - acquire flock at startup; skip if another instance is running
 # 2026.07.15 - v. 2.0 - merge run-control (traps, summary, cleanup) into this file
@@ -200,6 +201,32 @@ economist_summary_line() {
     printf '%-27s%s\n' "$1" "$2"
 }
 
+economist_format_step_name() {
+    local step="${1:-}"
+
+    case "${step}" in
+        init) echo "not started" ;;
+        download) echo "1 — download" ;;
+        process) echo "2 — process edition" ;;
+        speedup) echo "3 — speedup & loudness" ;;
+        move) echo "4 — move results" ;;
+        complete) echo "all steps completed" ;;
+        already_exists) echo "skipped (edition already exists)" ;;
+        "") echo "unknown" ;;
+        *) echo "${step}" ;;
+    esac
+}
+
+economist_summary_step_rc() {
+    local rc="${1:-}"
+
+    if [[ -z "${rc}" ]]; then
+        echo "not reached"
+    else
+        echo "${rc}"
+    fi
+}
+
 economist_format_runtime() {
     local elapsed="$1" hours minutes seconds
 
@@ -337,24 +364,23 @@ economist_print_summary() {
     economist_summary_line "Exit code:" "${ECONOMIST_RUN_EXIT_CODE}"
 
     if [[ "${ECONOMIST_RUN_MODE}" == pipeline ]]; then
-        economist_summary_line "Mode:" "full pipeline"
+        economist_summary_line "Run:" "all steps (download → move)"
         economist_summary_line "Edition URL:" "${ECONOMIST_PIPELINE_EDITION_URL:-}"
         economist_summary_line "Edition directory:" "${ECONOMIST_PIPELINE_EDITION_DIR:-}"
         economist_summary_line "Work directory:" "${ECONOMIST_PIPELINE_WORK_DIR:-}"
         economist_summary_line "Output directory:" "${ECONOMIST_PIPELINE_OUTPUT_DIR:-}"
-        economist_summary_line "Pipeline step reached:" "${ECONOMIST_RUN_STEP}"
-        economist_summary_line "Download exit code:" "${ECONOMIST_PIPELINE_RC_DOWNLOAD:-}"
-        economist_summary_line "Process exit code:" "${ECONOMIST_PIPELINE_RC_PROCESS:-}"
-        economist_summary_line "Speedup exit code:" "${ECONOMIST_PIPELINE_RC_SPEEDUP:-}"
-        economist_summary_line "Move exit code:" "${ECONOMIST_PIPELINE_RC_MOVE:-}"
+        economist_summary_line "Last step:" "$(economist_format_step_name "${ECONOMIST_RUN_STEP}")"
+        economist_summary_line "Download exit code:" "$(economist_summary_step_rc "${ECONOMIST_PIPELINE_RC_DOWNLOAD:-}")"
+        economist_summary_line "Process exit code:" "$(economist_summary_step_rc "${ECONOMIST_PIPELINE_RC_PROCESS:-}")"
+        economist_summary_line "Speedup exit code:" "$(economist_summary_step_rc "${ECONOMIST_PIPELINE_RC_SPEEDUP:-}")"
+        economist_summary_line "Move exit code:" "$(economist_summary_step_rc "${ECONOMIST_PIPELINE_RC_MOVE:-}")"
         if (( ECONOMIST_CLEANUP_DONE )); then
             economist_summary_line "Cleanup performed:" "yes"
         else
             economist_summary_line "Cleanup performed:" "no"
         fi
     else
-        economist_summary_line "Mode:" "pipeline step"
-        economist_summary_line "Step:" "${ECONOMIST_RUN_STEP}"
+        economist_summary_line "Step:" "$(economist_format_step_name "${ECONOMIST_RUN_STEP}")"
         economist_summary_line "Work directory:" "${ECONOMIST_WORK_DIR:-}"
         if [[ -n "${ECONOMIST_OUTPUT_DIR:-}" ]]; then
             economist_summary_line "Output directory:" "${ECONOMIST_OUTPUT_DIR}"
