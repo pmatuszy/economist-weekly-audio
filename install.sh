@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
 # v. 1.14 - 2026.07.15 - create starter config from example when none exists
 # v. 1.13 - 2026.07.15 - install script copies into bin/, not repo exec wrappers
 # v. 1.12 - 2026.07.15 - pipeline scripts use economist-N-*.sh names
@@ -392,6 +393,59 @@ install_bin_scripts() {
     echo "Installed ${BIN_DIR}/_load-config.sh"
 }
 
+print_crontab_hint() {
+    local run_script="${BIN_DIR}/economist-0-runme.sh"
+    local lock_file="${BASE_DIR}/var/lock/economist-runme.lock"
+    local log_file="${BASE_DIR}/var/log/economist-runme.log"
+    local base_dir="/worek/economist/theEconomist"
+    local output_dir archive_dir
+
+    output_dir="${base_dir}/_obrobione"
+    archive_dir="${base_dir}/archive"
+
+    if [[ -f "${CONF_FILE}" ]]; then
+        # shellcheck disable=SC1090
+        source "${CONF_FILE}" 2>/dev/null || true
+        base_dir="${ECONOMIST_BASE_DIR:-${base_dir}}"
+        output_dir="${ECONOMIST_OUTPUT_DIR:-${output_dir}}"
+        archive_dir="${base_dir}/archive"
+    fi
+
+    mkdir -p "${BASE_DIR}/var/lock" "${BASE_DIR}/var/log" 2>/dev/null || true
+
+    cat <<EOF
+
+--- Crontab hint (add with: crontab -e) ---
+# Economist weekly audio — paths for this install
+# Full example: ${REPO_ROOT}/crontab.example
+
+PROFILE_LOCATION_DIR=${BASE_DIR}
+ECONOMIST_BIN=${BIN_DIR}
+ECONOMIST_RUN=${run_script}
+ECONOMIST_LOCK=${lock_file}
+ECONOMIST_LOG=${log_file}
+ECONOMIST_OUTPUT=${output_dir}
+ECONOMIST_ARCHIVE=${archive_dir}
+
+# Thursday evening (edition usually available)
+30 21-23 * * 4 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
+
+# Retry early morning and daytime (Mon–Wed, Fri–Sun)
+15 0-4  * * 0-3,5,6 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
+15 7-22 * * 0-3,5,6 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
+
+# Move processed editions to archive (Thursday night)
+0 2 * * 4 /bin/mv -f \${ECONOMIST_OUTPUT}/[0-9]* \${ECONOMIST_ARCHIVE}/ 2>/dev/null
+
+# Remove empty output subdirs (Wednesday)
+0 4 * * 3 /usr/bin/find \${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
+
+Replace obsolete cron lines (e.g. /root/scripts/0-economist-runme.sh).
+Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path.
+---
+EOF
+}
+
 echo "Economist weekly audio — install"
 echo
 echo "Base directory:   ${BASE_DIR}"
@@ -451,3 +505,5 @@ remove_legacy_wrappers
 echo
 echo "Done. Run the pipeline with:"
 echo "  ${BIN_DIR}/economist-0-runme.sh"
+
+print_crontab_hint

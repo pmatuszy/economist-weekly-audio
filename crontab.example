@@ -1,0 +1,29 @@
+# Economist weekly audio — example crontab entries
+# Install with install.sh, edit conf/economist.local.conf, then: crontab -e
+# Paste the variable block and jobs below (adjust paths to your server).
+
+# --- paths (match install.sh / economist.local.conf) ---
+PROFILE_LOCATION_DIR=/root
+ECONOMIST_BIN=/root/bin
+ECONOMIST_RUN=/root/bin/economist-0-runme.sh
+ECONOMIST_LOCK=/root/var/lock/economist-runme.lock
+ECONOMIST_LOG=/root/var/log/economist-runme.log
+ECONOMIST_OUTPUT=/worek/economist/theEconomist/_obrobione
+ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
+
+# Thursday evening — edition usually available
+30 21-23 * * 4 /usr/bin/flock -n ${ECONOMIST_LOCK} ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
+
+# Retry: early morning and daytime (Mon–Wed, Fri–Sun; not Thursday)
+15 0-4  * * 0-3,5,6 /usr/bin/flock -n ${ECONOMIST_LOCK} ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
+15 7-22 * * 0-3,5,6 /usr/bin/flock -n ${ECONOMIST_LOCK} ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
+
+# Archive processed editions (Thursday night)
+0 2 * * 4 /bin/mv -f ${ECONOMIST_OUTPUT}/[0-9]* ${ECONOMIST_ARCHIVE}/ 2>/dev/null
+
+# Remove empty edition folders in output dir (Wednesday)
+0 4 * * 3 /usr/bin/find ${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
+
+# Obsolete — remove if still present:
+# /root/scripts/0-economist-runme.sh  →  ${ECONOMIST_RUN}
+# flock lock file must NOT be the script itself — use ${ECONOMIST_LOCK}

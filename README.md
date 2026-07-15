@@ -156,6 +156,10 @@ cd "${profile_location_dir:-$HOME}/github/economist-weekly-audio"
 "${profile_location_dir:-$HOME}/bin/economist-0-runme.sh"
 ```
 
+### 5. Crontab (optional)
+
+After install, the script prints a crontab hint with paths for your server. A full commented example is in [`crontab.example`](crontab.example) — use `economist-0-runme.sh` from `bin/`, a **separate** flock lock file (not the script), and paths from `economist.local.conf` for `_obrobione` / archive.
+
 Suggested layout:
 
 ```
@@ -173,6 +177,7 @@ economist-weekly-audio/              # public
 ├── economist.conf.example
 ├── economist.local.conf             # optional local copy (gitignored)
 ├── install.sh                       # interactive install into bin/ and conf/
+├── crontab.example                  # example cron schedule and path variables
 └── scripts/
 
 economist-weekly-audio-private/      # private sibling clone (${profile_location_dir:-$HOME}/github/)
