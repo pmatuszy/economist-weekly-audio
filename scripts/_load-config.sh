@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.15 - show-available list: oldest first, newest at bottom
 # 2026.07.16 - v. 2.14 - show-available pick: single-line prompt ending with ": "
 # 2026.07.16 - v. 2.13 - show-available pick: accept leading zeros (e.g. 000010 → 10)
 # 2026.07.15 - v. 2.12 - Issue column shows Economist issue number (e.g. 9419)
@@ -342,8 +343,22 @@ economist_show_and_pick_available_editions() {
         return 1
     fi
 
+    if [[ ${#pick_isos[@]} -gt 1 ]]; then
+        local -a _rev_isos=() _rev_titles=() _rev_local=() _rev_issues=()
+        for (( idx = ${#pick_isos[@]} - 1; idx >= 0; --idx )); do
+            _rev_isos+=("${pick_isos[idx]}")
+            _rev_titles+=("${pick_titles[idx]}")
+            _rev_local+=("${pick_local[idx]}")
+            _rev_issues+=("${pick_issues[idx]}")
+        done
+        pick_isos=("${_rev_isos[@]}")
+        pick_titles=("${_rev_titles[@]}")
+        pick_local=("${_rev_local[@]}")
+        pick_issues=("${_rev_issues[@]}")
+    fi
+
     echo
-    echo "Verified editions (RSS item → Saturday edition date):"
+    echo "Verified editions (oldest at top, newest at bottom):"
     printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
     printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
     for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
