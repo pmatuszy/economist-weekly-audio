@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.10 - 2026.07.15 - added script description header
 # v. 2.9 - 2026.07.15 - Polish local variable names translated to English
 # v. 2.8 - 2026.06.19 - runtime messages translated to English
 # v. 2.7 - 2026.06.19 - changelog comments translated to English
@@ -7,6 +8,7 @@
 # v. 2.4 - 2025.09.17 - auto-tip for xmllint + grep fallback when xmllint missing or returns 0
 # v. 2.3 - 2025.09.17 - added echo/logging
 # v. 2.2 - 2025.09.17 - optional YYYY-MM-DD selects n-th RSS item (xmllint); default is first enclosure
+# Downloads the weekly Economist MP3 from the personal RSS feed.
 
 set -euo pipefail
 LC_ALL=C

@@ -1,10 +1,13 @@
 #!/bin/bash
+# v. 2.7 - 2026.07.15 - added script description header
+# v. 2.6 - 2026.07.15 - renamed output_ext to output_file_ext
 # v. 2.5 - 2026.07.15 - Polish local variable names translated to English
 # v. 2.4 - 2026.06.19 - runtime messages translated to English
 # v. 2.3 - 2026.06.19 - changelog comments translated to English
 # v. 2.2 - 2026.06.19 - renamed from 3-zmien-szybkosc-podbij-glosnosc.sh
 # v. 2.1 - 2026.06.16 - ffmpeg path from economist.local.conf
 # v. 2.0 - 2025.01.28 - major rewrite — practically a new script
+# Speeds up chapter MP3s and applies speech normalization and loudness filters.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh
@@ -30,21 +33,21 @@ equalizer="firequalizer=gain_entry='entry(0,-8);entry(250,-6);entry(1000,-8);ent
 speedup_filter="atempo=${speed_factor}"
 speech_norm_filter="speechnorm=expansion=20[after_normalization];[after_normalization]apad=pad_dur=1s"
 
-output_ext=mp3
+output_file_ext=mp3
 
 for p in $(find "${work_dir}" -type f -not -name \*SPEECHNORM_SPEEDUP\* -name \*mp3 | sort); do
    export extension="${p##*.}"
-   output_file="$(dirname "${p}")/$(basename "${p}" '.'"${extension}")_SPEECHNORM_SPEEDUP_${speed_factor}.${output_ext}"
+   output_file="$(dirname "${p}")/$(basename "${p}" '.'"${extension}")_SPEECHNORM_SPEEDUP_${speed_factor}.${output_file_ext}"
 
    if [ -f "$p" ]; then
      /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_timeout_seconds}" "${ffmpeg_path}" ${ffmpeg_common_args} \
-       -i "$p" $mono_flag -filter:a "${silence_removal_filter},${equalizer},${speedup_filter}" "${p}_tmp.${output_ext}"
+       -i "$p" $mono_flag -filter:a "${silence_removal_filter},${equalizer},${speedup_filter}" "${p}_tmp.${output_file_ext}"
      /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_timeout_seconds}" "${ffmpeg_path}" ${ffmpeg_common_args} \
-       -i "${p}_tmp.${output_ext}" $mono_flag -filter_complex:a "${speech_norm_filter}" "$output_file"
+       -i "${p}_tmp.${output_file_ext}" $mono_flag -filter_complex:a "${speech_norm_filter}" "$output_file"
      chmod --reference="${p}" "$output_file"
      chown --reference="${p}" "$output_file"
      touch --reference="${p}" "$output_file"
-     rm "${p}_tmp.${output_ext}" "$p"
+     rm "${p}_tmp.${output_file_ext}" "$p"
    else
      echo "File $p does not exist — skipping ffmpeg"
    fi

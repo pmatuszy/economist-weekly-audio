@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 1.8 - 2026.07.15 - added script description header
 # v. 1.7 - 2026.07.15 - Polish local variable names translated to English
 # v. 1.6 - 2026.06.19 - runtime messages translated to English
 # v. 1.5 - 2026.06.19 - changelog comments translated to English
@@ -7,6 +8,7 @@
 # v. 1.2 - 2025.10.27 - bugfix: removed -df from rar for artwork — it was deleting the input file
 # v. 1.1 - 2025.10.21 - artwork file is added to output RAR but not deleted
 # v. 1.0 - 2025.01.28 - major rewrite — practically a new script
+# Splits chapters, embeds artwork, renames files, and archives the original MP3.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh

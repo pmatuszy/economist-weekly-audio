@@ -1,5 +1,8 @@
 # shellcheck shell=bash
-# Shared config loader for economist-weekly-audio scripts.
+# v. 1.2 - 2026.07.15 - config hint: profile_location_dir fallback to HOME
+# v. 1.1 - 2026.07.15 - config hint: ~/github sibling path
+# v. 1.0 - 2026.06.16 - shared config loader for pipeline scripts
+# Shared config loader: paths, secrets, healthcheck pings, and chown helper.
 
 economist_default_conf_paths() {
     local root="$1"
@@ -30,8 +33,7 @@ load_economist_config() {
         echo "Missing economist.local.conf" >&2
         echo "Options:" >&2
         echo "  1) cp economist.conf.example economist.local.conf and edit" >&2
-        echo "  2) clone economist-weekly-audio-private next to this repo" >&2
-        echo "     (or github-economist-weekly-audio-private under the same parent as github-economist-weekly-audio)" >&2
+        echo "  2) clone economist-weekly-audio-private next to this repo (e.g. \${profile_location_dir:-\$HOME}/github/economist-weekly-audio-private)" >&2
         echo "  3) set ECONOMIST_CONF=/path/to/economist.local.conf" >&2
         exit 1
     fi

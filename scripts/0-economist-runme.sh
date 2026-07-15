@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.2 - 2026.07.15 - added script description header
 # v. 1.1 - 2026.07.15 - Polish local variable names translated to English
 # v. 1.0 - 2026.06.19 - runtime messages translated to English
 # v. 0.9 - 2026.06.19 - changelog comments translated to English
@@ -10,6 +11,7 @@
 # v. 0.3 - 2021.06.07 - check exit codes from all child scripts
 # v. 0.2 - 2021.04.19 - check exit code from 1-economist-download.sh
 # v. 0.1 - 2018.07.31 - initial release
+# Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
 
 DEBUG=1
 
