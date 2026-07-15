@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.23 - after cron migration show old (commented) and new sections
 # 2026.07.15 - v. 1.22 - offer to comment out obsolete economist cron lines and add new block
 # 2026.07.15 - v. 1.21 - offer removal of obsolete /root/scripts Polish-era copies
 # 2026.07.15 - v. 1.20 - drop _economist-script-header.sh; use github-bin _script_header.sh
@@ -802,9 +803,29 @@ offer_crontab_obsolete_migration() {
 
     if crontab "${tmp}"; then
         echo "Crontab updated."
+        echo
+
+        print_section "Crontab — old section (now commented out)"
+        echo "# --- economist-weekly-audio: obsolete cron lines commented out by install.sh on ${stamp} ---"
+        for line in "${obsolete_lines[@]}"; do
+            if [[ "${line}" =~ ^[[:space:]]*# ]]; then
+                echo "${line}"
+            else
+                echo "# ${line}"
+            fi
+        done
+        echo "# --- end obsolete economist cron lines ---"
+        echo
+
         if (( has_new_cron == 0 )); then
-            echo "Added new economist cron block for ${ECON_CRON_RUN_SCRIPT}"
+            print_section "Crontab — new section added"
+            echo_economist_cron_block migrate
+        else
+            print_section "Crontab — new section"
+            echo "No new block added — ${BIN_DIR}/economist-0-runme.sh is already in your crontab."
         fi
+        echo "${SECTION_RULE}"
+        echo
     else
         echo "Failed to update crontab. Temp file left at: ${tmp}" >&2
         return 1
