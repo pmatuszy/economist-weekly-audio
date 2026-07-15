@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.7 - pipeline step exit codes: N/A when stage not reached
+# 2026.07.15 - v. 2.6 - summary: edition dir file count; cron archive from/to paths
 # 2026.07.15 - v. 2.5 - cleanup_empty_dirs step label in summary
 # 2026.07.15 - v. 2.4 - ECONOMIST_ARCHIVE_DIR default; archive step label in summary
 # 2026.07.15 - v. 2.3 - clearer pipeline summary labels and step exit codes
@@ -226,7 +228,7 @@ economist_summary_step_rc() {
     local rc="${1:-}"
 
     if [[ -z "${rc}" ]]; then
-        echo "not reached"
+        echo "N/A (this stage not reached)"
     else
         echo "${rc}"
     fi
@@ -342,6 +344,42 @@ economist_cleanup_pipeline_artifacts() {
     echo
 }
 
+economist_count_files_in_dir() {
+    local dir="$1" count
+
+    [[ -d "${dir}" ]] || {
+        echo "0"
+        return 0
+    }
+
+    count="$(find "${dir}" -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+    echo "${count:-0}"
+}
+
+economist_summary_edition_paths() {
+    local edition_dir="${1:-}" edition_name="${2:-}" archive_dir="${3:-}"
+    local file_count archive_target
+
+    [[ -n "${edition_dir}" ]] || return 0
+
+    if [[ -d "${edition_dir}" ]]; then
+        file_count="$(economist_count_files_in_dir "${edition_dir}")"
+        economist_summary_line "Edition directory:" "${edition_dir} (${file_count} files)"
+    else
+        economist_summary_line "Edition directory:" "${edition_dir}"
+        return 0
+    fi
+
+    edition_name="${edition_name:-$(basename "${edition_dir}")}"
+    archive_dir="${archive_dir:-${ECONOMIST_ARCHIVE_DIR:-}}"
+    [[ -n "${archive_dir}" && -n "${edition_name}" ]] || return 0
+
+    archive_target="${archive_dir}/${edition_name}"
+    economist_summary_line "Cron archive:" "Thursday 02:00 — economist-archive-editions.sh"
+    printf 'From: %s\n' "${edition_dir}"
+    printf 'To:   %s\n' "${archive_target}"
+}
+
 economist_print_summary() {
     (( ECONOMIST_SUMMARY_PRINTED )) && return 0
     ECONOMIST_SUMMARY_PRINTED=1
@@ -371,7 +409,10 @@ economist_print_summary() {
     if [[ "${ECONOMIST_RUN_MODE}" == pipeline ]]; then
         economist_summary_line "Run:" "all steps (download → move)"
         economist_summary_line "Edition URL:" "${ECONOMIST_PIPELINE_EDITION_URL:-}"
-        economist_summary_line "Edition directory:" "${ECONOMIST_PIPELINE_EDITION_DIR:-}"
+        economist_summary_edition_paths \
+            "${ECONOMIST_PIPELINE_EDITION_DIR:-}" \
+            "${ECONOMIST_PIPELINE_EDITION_NAME:-}" \
+            "${ECONOMIST_ARCHIVE_DIR:-}"
         economist_summary_line "Work directory:" "${ECONOMIST_PIPELINE_WORK_DIR:-}"
         economist_summary_line "Output directory:" "${ECONOMIST_PIPELINE_OUTPUT_DIR:-}"
         economist_summary_line "Last step:" "$(economist_format_step_name "${ECONOMIST_RUN_STEP}")"
