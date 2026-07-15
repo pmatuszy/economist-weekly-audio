@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
+# v. 1.5 - 2026.07.15 - prompts default yes [Y/n/q]; --yes auto-fixes chmod 600
+# v. 1.4 - 2026.07.15 - prompts: single key [y/N/q], 300s timeout, default N
 # v. 1.3 - 2026.07.15 - install economist.local.conf into conf/ beside bin/
 # v. 1.2 - 2026.07.15 - check private config file permissions are 600
 # v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
 # v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
 # Interactive install: wrappers into bin/, config into conf/ (sibling directories).
-# Copies economist.local.conf from the private repo when needed; requires mode 600.
+# Single-key prompts [Y/n/q] with 300s timeout; default is yes.
 
 set -euo pipefail
 
 BASE_DIR="${profile_location_dir:-$HOME}"
+PROMPT_TIMEOUT=300
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -33,7 +36,7 @@ Expected layout:
 Options:
   --bin-dir PATH   Target bin directory (default: \${profile_location_dir:-\$HOME}/bin)
   --pull           Run "git pull --ff-only" in this repo before installing
-  -y, --yes        Install without confirmation prompt
+  -y, --yes        Install without prompts (auto-answer yes, like batch mode)
   -h, --help       Show this help
 
 Examples:
@@ -96,6 +99,27 @@ if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
     exit 1
 fi
 
+read_yes_no_quit() {
+    local prompt="$1" answer=""
+
+    if (( ASSUME_YES )); then
+        echo "${prompt}y (--yes)"
+        REPLY=y
+        return 0
+    fi
+
+    echo -n "${prompt}"
+    read -t "${PROMPT_TIMEOUT}" -n 1 answer || answer=""
+    echo
+    answer="${answer//$'\r'/}"
+
+    case "${answer}" in
+        n|N) REPLY=n ;;
+        q|Q) REPLY=q ;;
+        *)   REPLY=y ;;
+    esac
+}
+
 check_config_permissions() {
     local conf_file="$1"
     local perms
@@ -110,19 +134,24 @@ check_config_permissions() {
     echo "  Fix with: chmod 600 ${conf_file}" >&2
 
     if (( ASSUME_YES )); then
-        echo "Refusing to install: fix config permissions first." >&2
-        exit 1
+        chmod 600 "${conf_file}"
+        echo "  permissions: 600 (fixed, --yes)"
+        return 0
     fi
 
-    read -r -p "Fix permissions now with chmod 600? [y/N] " fix_answer
-    case "${fix_answer}" in
-        y|Y|yes|YES)
-            chmod 600 "${conf_file}"
-            echo "  permissions: 600 (fixed)"
-            ;;
-        *)
+    read_yes_no_quit "Fix permissions now with chmod 600? [Y/n/q]: "
+    case "${REPLY}" in
+        n)
             echo "Installation cancelled: config file must be mode 600." >&2
             exit 1
+            ;;
+        q)
+            echo "Quit."
+            exit 0
+            ;;
+        *)
+            chmod 600 "${conf_file}"
+            echo "  permissions: 600 (fixed)"
             ;;
     esac
 }
@@ -207,16 +236,19 @@ case ":${PATH}:" in
         ;;
 esac
 
-if (( ! ASSUME_YES )); then
-    read -r -p "Proceed with installation? [y/N] " answer
-    case "${answer}" in
-        y|Y|yes|YES) ;;
-        *)
-            echo "Installation cancelled."
-            exit 0
-            ;;
-    esac
-fi
+read_yes_no_quit "Proceed with installation? [Y/n/q]: "
+case "${REPLY}" in
+    n)
+        echo "Installation cancelled."
+        exit 0
+        ;;
+    q)
+        echo "Quit."
+        exit 0
+        ;;
+    *)
+        ;;
+esac
 
 install_config_file
 
