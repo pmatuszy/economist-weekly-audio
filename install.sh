@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.30 - show installed vs repository script versions in install plan
 # 2026.07.15 - v. 1.29 - merge run-control into _load-config.sh; drop separate helper file
 # 2026.07.15 - v. 1.28 - ECONOMIST_LOCK defaults to /var/lock/economist-runme.lock
 # 2026.07.15 - v. 1.27 - ECONOMIST_LOG defaults to /var/log/economist-runme.log
@@ -155,6 +156,142 @@ PRIVATE_CONF="$(cd "${REPO_ROOT}/.." && pwd)/${REPO_NAME}-private/economist.loca
 LOCAL_CONF="${REPO_ROOT}/economist.local.conf"
 CONFIG_PATH_LABEL_WIDTH=8
 CONFIG_PATH_TEXT_COL=12
+SCRIPT_INSTALL_NAME_WIDTH=34
+SCRIPT_INSTALL_VER_WIDTH=20
+
+economist_parse_script_version() {
+    local file="$1" line="" ver="" date="" line_no=0
+
+    if [[ ! -f "${file}" ]]; then
+        echo "missing|"
+        return 0
+    fi
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        ((++line_no))
+        (( line_no > 40 )) && break
+
+        if [[ "${line}" =~ ^#[[:space:]]*([0-9]{4}\.[0-9]{2}\.[0-9]{2})[[:space:]]+-[[:space:]]+v\.[[:space:]]*([0-9]+(\.[0-9]+)*) ]]; then
+            date="${BASH_REMATCH[1]}"
+            ver="${BASH_REMATCH[2]}"
+            echo "${ver}|${date}"
+            return 0
+        fi
+        if [[ "${line}" =~ ^#[[:space:]]*v\.[[:space:]]*([0-9]+(\.[0-9]+)*)[[:space:]]+-[[:space:]]+([0-9]{4}\.[0-9]{2}\.[0-9]{2}) ]]; then
+            ver="${BASH_REMATCH[1]}"
+            date="${BASH_REMATCH[3]}"
+            echo "${ver}|${date}"
+            return 0
+        fi
+    done < "${file}"
+
+    echo "unknown|"
+}
+
+economist_format_script_version() {
+    local parsed="$1" ver="" date=""
+
+    ver="${parsed%%|*}"
+    date="${parsed#*|}"
+
+    case "${ver}" in
+        missing)
+            printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "not installed"
+            ;;
+        unknown)
+            printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "unknown"
+            ;;
+        *)
+            if [[ -n "${date}" ]]; then
+                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v${ver} (${date})"
+            else
+                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v${ver}"
+            fi
+            ;;
+    esac
+}
+
+economist_script_install_marker() {
+    local current_parsed="$1" new_parsed="$2"
+    local current_ver="${current_parsed%%|*}" new_ver="${new_parsed%%|*}"
+
+    if [[ "${current_ver}" == missing ]]; then
+        echo "+"
+    elif [[ "${current_ver}" == unknown || "${new_ver}" == unknown ]]; then
+        echo "→"
+    elif [[ "${current_ver}" == "${new_ver}" && "${current_parsed}" == "${new_parsed}" ]]; then
+        echo "="
+    else
+        echo "→"
+    fi
+}
+
+print_script_version_row() {
+    local name="$1" installed_file="$2" repo_file="$3"
+    local current_parsed new_parsed marker
+
+    current_parsed="$(economist_parse_script_version "${installed_file}")"
+    new_parsed="$(economist_parse_script_version "${repo_file}")"
+    marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
+
+    printf '  %-*s %s %s %s ' \
+        "${SCRIPT_INSTALL_NAME_WIDTH}" "${name}" \
+        "$(economist_format_script_version "${current_parsed}")" \
+        "${marker}" \
+        "$(economist_format_script_version "${new_parsed}")"
+    echo
+}
+
+print_scripts_install_plan() {
+    local script_path name target
+
+    echo "Install into:"
+    printf "  %s/\n" "${BIN_DIR}"
+    echo
+    printf '  %-*s %-*s    %s\n' \
+        "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
+        "${SCRIPT_INSTALL_VER_WIDTH}" "Installed" \
+        "Repository"
+    printf '  %.*s\n' 78 '──────────────────────────────────────────────────────────────────────────────'
+    for script_path in "${SCRIPT_PATHS[@]}"; do
+        name="$(basename "${script_path}")"
+        target="${BIN_DIR}/${name}"
+        print_script_version_row "${name}" "${target}" "${script_path}"
+    done
+    print_script_version_row "_load-config.sh" "${BIN_DIR}/_load-config.sh" "${SCRIPTS_DIR}/_load-config.sh"
+    echo
+    echo "  Legend:  + new   → update   = unchanged"
+    echo
+}
+
+print_legacy_scripts_preview() {
+    local legacy_preview=() legacy_scripts_preview=()
+
+    find_legacy_wrappers legacy_preview
+    find_legacy_scripts_dir legacy_scripts_preview
+
+    if [[ ${#legacy_preview[@]} -eq 0 && ${#legacy_scripts_preview[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    print_section "Legacy scripts (optional removal after install)"
+
+    if [[ ${#legacy_preview[@]} -gt 0 ]]; then
+        echo "Old names in ${BIN_DIR}:"
+        for path in "${legacy_preview[@]}"; do
+            echo "  ${path}"
+        done
+        echo
+    fi
+
+    if [[ ${#legacy_scripts_preview[@]} -gt 0 ]]; then
+        echo "Polish-era copies in ${LEGACY_SCRIPTS_DIR}:"
+        for path in "${legacy_scripts_preview[@]}"; do
+            echo "  ${path}"
+        done
+        echo
+    fi
+}
 
 normalize_path() {
     local path="$1" dir base resolved=""
@@ -560,23 +697,46 @@ install_config_file() {
 }
 
 install_bin_scripts() {
-    local script_path name target
+    local script_path name target current_parsed new_parsed marker
 
     print_section "Installing scripts"
     mkdir -p "${BIN_DIR}"
 
+    printf '  %-*s %-*s    %s\n' \
+        "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
+        "${SCRIPT_INSTALL_VER_WIDTH}" "Was" \
+        "Now"
+    printf '  %.*s\n' 78 '──────────────────────────────────────────────────────────────────────────────'
+
     for script_path in "${SCRIPT_PATHS[@]}"; do
         name="$(basename "${script_path}")"
         target="${BIN_DIR}/${name}"
+        current_parsed="$(economist_parse_script_version "${target}")"
+        new_parsed="$(economist_parse_script_version "${script_path}")"
+        marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
         cp "${script_path}" "${target}"
         chmod 755 "${target}"
-        echo "Installed ${target}"
+        printf '  %-*s %s %s %s ' \
+            "${SCRIPT_INSTALL_NAME_WIDTH}" "${name}" \
+            "$(economist_format_script_version "${current_parsed}")" \
+            "${marker}" \
+            "$(economist_format_script_version "${new_parsed}")"
+        echo
     done
 
+    current_parsed="$(economist_parse_script_version "${BIN_DIR}/_load-config.sh")"
+    new_parsed="$(economist_parse_script_version "${SCRIPTS_DIR}/_load-config.sh")"
+    marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
     cp "${SCRIPTS_DIR}/_load-config.sh" "${BIN_DIR}/_load-config.sh"
     chmod 755 "${BIN_DIR}/_load-config.sh"
-    echo "Installed ${BIN_DIR}/_load-config.sh"
+    printf '  %-*s %s %s %s ' \
+        "${SCRIPT_INSTALL_NAME_WIDTH}" "_load-config.sh" \
+        "$(economist_format_script_version "${current_parsed}")" \
+        "${marker}" \
+        "$(economist_format_script_version "${new_parsed}")"
+    echo
     rm -f "${BIN_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-script-header.sh"
+    echo
 }
 
 print_crontab_hint() {
@@ -896,31 +1056,8 @@ echo
 print_section "Config plan"
 describe_config_plan
 print_section "Scripts to install"
-echo "Target directory: ${BIN_DIR}"
-for script_path in "${SCRIPT_PATHS[@]}"; do
-    echo "  $(basename "${script_path}")"
-done
-echo "  _load-config.sh"
-
-legacy_preview=()
-find_legacy_wrappers legacy_preview
-legacy_scripts_preview=()
-find_legacy_scripts_dir legacy_scripts_preview
-if [[ ${#legacy_preview[@]} -gt 0 ]]; then
-    echo
-    echo "Legacy script names in bin/ (will offer removal after install):"
-    for path in "${legacy_preview[@]}"; do
-        echo "  ${path}"
-    done
-fi
-if [[ ${#legacy_scripts_preview[@]} -gt 0 ]]; then
-    echo
-    echo "Obsolete scripts in ${LEGACY_SCRIPTS_DIR} (Polish-era copies; will offer removal):"
-    for path in "${legacy_scripts_preview[@]}"; do
-        echo "  ${path}"
-    done
-fi
-echo
+print_scripts_install_plan
+print_legacy_scripts_preview
 
 case ":${PATH}:" in
     *:"${BIN_DIR}":*) ;;
