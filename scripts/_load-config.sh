@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.18 - fix pick loop for bash without labeled continue
 # 2026.07.16 - v. 2.17 - show-available: confirm pick; N relists; force reprocess
 # 2026.07.16 - v. 2.15 - show-available list: oldest first, newest at bottom
 # 2026.07.16 - v. 2.14 - show-available pick: single-line prompt ending with ": "
@@ -396,7 +397,7 @@ economist_show_and_pick_available_editions() {
         return 0
     fi
 
-    pick_again: while true; do
+    while true; do
         echo
         echo "Verified editions (oldest at top, newest at bottom):"
         printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
@@ -453,7 +454,7 @@ economist_show_and_pick_available_editions() {
                     return 0
                     ;;
                 n|N)
-                    continue pick_again
+                    break
                     ;;
                 ''|y|Y)
                     _picked_iso_ref="${pick_isos[sel_idx]}"
