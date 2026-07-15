@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.12 - Issue column shows Economist issue number (e.g. 9419)
 # 2026.07.15 - v. 2.11 - show-available pick prompt: Enter/Q=quit default; number=download
 # 2026.07.15 - v. 2.10 - show-available table: Issue column (RSS feed position)
 # 2026.07.15 - v. 2.9 - show-available: progress dots; Enter defaults to quit
@@ -157,6 +158,29 @@ economist_edition_output_dir_for_date() {
     echo "${ECONOMIST_OUTPUT_DIR}/${y}.${m}.${d}_TheEconomist"
 }
 
+economist_issue_number_for_edition_date() {
+    local iso="$1" year="" base_issue=9226 edition_epoch initial_epoch issue_num=""
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    year="${iso%%-*}"
+
+    edition_epoch=$(date -d "${iso}" +%s)
+    initial_epoch=$(date -d "2021-01-02" +%s)
+
+    # Summer double issues: one week is skipped in the official numbering.
+    if (( edition_epoch > $(date -d "2022-08-12" +%s) )); then
+        (( base_issue-- ))
+    fi
+    if (( edition_epoch > $(date -d "2023-08-11" +%s) )); then
+        (( base_issue-- ))
+    fi
+
+    issue_num=$(awk -v bi="${base_issue}" -v y="${year}" -v de="${edition_epoch}" -v ie="${initial_epoch}" \
+        'BEGIN { printf "%.0f", bi - (y - 2021) + (de - ie) / 86400 / 7 }')
+    [[ "${issue_num}" =~ ^[0-9]+$ ]] || return 1
+    echo "${issue_num}"
+}
+
 economist_rss_fetch_to() {
     local dest="$1"
 
@@ -247,10 +271,11 @@ economist_show_and_pick_available_editions() {
     local -n _picked_iso_ref="$1"
     local rss_file="" item_count=0 pos=0 edition_iso="" title="" url="" local_status=""
     local edition_dir="" choice="" idx=0 dots_pid=0 verified_count=0
-    local -a pick_positions=()
+    local issue_no=""
     local -a pick_isos=()
     local -a pick_titles=()
     local -a pick_local=()
+    local -a pick_issues=()
 
     _picked_iso_ref=""
 
@@ -299,17 +324,18 @@ economist_show_and_pick_available_editions() {
         title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
         edition_dir="$(economist_edition_output_dir_for_date "${edition_iso}")"
         local_status="$(economist_local_edition_status "${edition_dir}")"
+        issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"
 
-        pick_positions+=("${pos}")
         pick_isos+=("${edition_iso}")
         pick_titles+=("${title}")
         pick_local+=("${local_status}")
+        pick_issues+=("${issue_no}")
         (( ++verified_count )) || true
     done
 
     printf ' %s verified.\n' "${verified_count}" >&2
 
-    if [[ ${#pick_positions[@]} -eq 0 ]]; then
+    if [[ ${#pick_isos[@]} -eq 0 ]]; then
         echo "No editions verified as downloadable on the server." >&2
         return 1
     fi
@@ -318,13 +344,13 @@ economist_show_and_pick_available_editions() {
     echo "Verified editions (RSS item → Saturday edition date):"
     printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
     printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
-    for (( idx = 0; idx < ${#pick_positions[@]}; ++idx )); do
+    for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
         printf '  %-3s %-12s %-36s %-18s %s\n' \
             "$((idx + 1))" \
             "${pick_isos[idx]}" \
             "${pick_titles[idx]:0:36}" \
             "${pick_local[idx]:0:18}" \
-            "${pick_positions[idx]}"
+            "${pick_issues[idx]}"
     done
     echo
 
@@ -335,7 +361,7 @@ economist_show_and_pick_available_editions() {
 
     echo
     echo "Press Enter or Q to quit (default)."
-    echo "To download: enter 1–${#pick_positions[@]} and press Enter."
+    echo "To download: enter 1–${#pick_isos[@]} and press Enter."
 
     while true; do
         if [[ -r /dev/tty ]]; then
@@ -349,15 +375,15 @@ economist_show_and_pick_available_editions() {
                 return 0
                 ;;
             *[!0-9]*)
-                echo "Invalid input — enter 1–${#pick_positions[@]} to download, or press Enter to quit."
+                echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
                 ;;
             *)
-                if (( choice >= 1 && choice <= ${#pick_positions[@]} )); then
+                if (( choice >= 1 && choice <= ${#pick_isos[@]} )); then
                     _picked_iso_ref="${pick_isos[choice - 1]}"
-                    echo "Selected edition: ${_picked_iso_ref}"
+                    echo "Selected edition: ${_picked_iso_ref} (issue ${pick_issues[choice - 1]})"
                     return 0
                 fi
-                echo "Invalid input — enter 1–${#pick_positions[@]} to download, or press Enter to quit."
+                echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
                 ;;
         esac
     done
