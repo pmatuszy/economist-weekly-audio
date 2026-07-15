@@ -123,7 +123,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-`install.sh` is interactive: it shows the repo path, config plan, wrappers to create, and asks **Proceed with installation? [y/N/q]** before writing anything. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old wrappers with previous naming (`0-economist-runme.sh`, `economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
+`install.sh` copies pipeline scripts into `bin/` (and `_load-config.sh`). `economist-0-runme.sh` runs sibling scripts from the same `bin/` directory. It is interactive: it shows the repo path, config plan, scripts to install, and asks **Proceed with installation? [y/N/q]** before writing anything. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old wrappers with previous naming (`0-economist-runme.sh`, `economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
 
 Pull latest from GitHub and install in one step:
 
@@ -162,7 +162,8 @@ Suggested layout:
 ${profile_location_dir:-$HOME}/github/economist-weekly-audio/          # scripts (git clone)
 ${profile_location_dir:-$HOME}/github/economist-weekly-audio-private/  # config source (git clone)
 ${profile_location_dir:-$HOME}/conf/economist.local.conf              # installed secrets (mode 600)
-${profile_location_dir:-$HOME}/bin/economist-0-runme.sh                # wrapper -> repo script
+${profile_location_dir:-$HOME}/bin/economist-0-runme.sh                # pipeline scripts (copied)
+${profile_location_dir:-$HOME}/bin/_load-config.sh                   # shared config loader
 ```
 
 ## Layout

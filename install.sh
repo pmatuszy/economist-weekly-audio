@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.13 - 2026.07.15 - install script copies into bin/, not repo exec wrappers
 # v. 1.12 - 2026.07.15 - pipeline scripts use economist-N-*.sh names
 # v. 1.11 - 2026.07.15 - pipeline scripts restored to 0-4-economist-*.sh names
 # v. 1.10 - 2026.07.15 - config replace: description, paths, then prompt line
@@ -12,7 +13,7 @@
 # v. 1.2 - 2026.07.15 - check private config file permissions are 600
 # v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
 # v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
-# Interactive install: economist-N-*.sh wrappers into bin/, config into conf/.
+# Copies economist-N-*.sh scripts into bin/; child scripts run from same directory.
 # Single-key prompts [y/N/q] with 300s timeout; default is no.
 
 set -euo pipefail
@@ -45,14 +46,15 @@ usage() {
     cat <<EOF
 Usage: install.sh [options]
 
-Install pipeline scripts into a bin directory as small wrappers that run the
-copy in this repository.
+Install pipeline scripts into a bin directory (default:
+\${profile_location_dir:-\$HOME}/bin). Scripts call each other from that
+same bin directory — not from the git repo.
 
 Expected layout:
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}/                 # this repo
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}-private/         # optional secrets source
   \${profile_location_dir:-\$HOME}/conf/economist.local.conf             # installed config (mode 600)
-  \${profile_location_dir:-\$HOME}/bin/economist-0-runme.sh             # installed wrappers
+  \${profile_location_dir:-\$HOME}/bin/economist-0-runme.sh             # installed scripts
 
 Options:
   --bin-dir PATH   Target bin directory (default: \${profile_location_dir:-\$HOME}/bin)
@@ -208,23 +210,23 @@ remove_legacy_wrappers() {
     fi
 
     echo
-    echo "Legacy wrappers (old numbered names):"
+    echo "Legacy script names (old naming):"
     for path in "${legacy_paths[@]}"; do
         echo "  ${path}"
     done
 
-    read_yes_no_quit "Remove these legacy wrappers? [y/N/q]: "
+    read_yes_no_quit "Remove these legacy scripts? [y/N/q]: "
     case "${REPLY}" in
         y)
             rm -f "${legacy_paths[@]}"
-            echo "Removed ${#legacy_paths[@]} legacy wrapper(s)."
+            echo "Removed ${#legacy_paths[@]} legacy script(s)."
             ;;
         q)
             echo "Quit."
             exit 0
             ;;
         *)
-            echo "Kept legacy wrappers."
+            echo "Kept legacy scripts."
             ;;
     esac
 }
@@ -356,6 +358,24 @@ install_config_file() {
     check_config_permissions "${CONF_FILE}"
 }
 
+install_bin_scripts() {
+    local script_path name target
+
+    mkdir -p "${BIN_DIR}"
+
+    for script_path in "${SCRIPT_PATHS[@]}"; do
+        name="$(basename "${script_path}")"
+        target="${BIN_DIR}/${name}"
+        cp "${script_path}" "${target}"
+        chmod 755 "${target}"
+        echo "Installed ${target}"
+    done
+
+    cp "${SCRIPTS_DIR}/_load-config.sh" "${BIN_DIR}/_load-config.sh"
+    chmod 755 "${BIN_DIR}/_load-config.sh"
+    echo "Installed ${BIN_DIR}/_load-config.sh"
+}
+
 echo "Economist weekly audio — install"
 echo
 echo "Base directory:   ${BASE_DIR}"
@@ -366,16 +386,17 @@ echo
 echo "Config plan:"
 describe_config_plan
 echo
-echo "Wrappers to install:"
+echo "Scripts to install into ${BIN_DIR}:"
 for script_path in "${SCRIPT_PATHS[@]}"; do
-    echo "  ${BIN_DIR}/$(basename "${script_path}") -> ${script_path}"
+    echo "  $(basename "${script_path}")"
 done
+echo "  _load-config.sh"
 
 legacy_preview=()
 find_legacy_wrappers legacy_preview
 if [[ ${#legacy_preview[@]} -gt 0 ]]; then
     echo
-    echo "Legacy wrappers present (will offer removal after install):"
+    echo "Legacy script names present (will offer removal after install):"
     for path in "${legacy_preview[@]}"; do
         echo "  ${path}"
     done
@@ -407,19 +428,7 @@ esac
 
 install_config_file
 
-mkdir -p "${BIN_DIR}"
-
-for script_path in "${SCRIPT_PATHS[@]}"; do
-    name="$(basename "${script_path}")"
-    target="${BIN_DIR}/${name}"
-
-    cat > "${target}" <<EOF
-#!/usr/bin/env bash
-exec "${script_path}" "\$@"
-EOF
-    chmod 755 "${target}"
-    echo "Installed ${target}"
-done
+install_bin_scripts
 
 remove_legacy_wrappers
 
