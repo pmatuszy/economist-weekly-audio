@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.24 - ignore already-commented cron lines when detecting obsolete entries
 # 2026.07.15 - v. 1.23 - after cron migration show old (commented) and new sections
 # 2026.07.15 - v. 1.22 - offer to comment out obsolete economist cron lines and add new block
 # 2026.07.15 - v. 1.21 - offer removal of obsolete /root/scripts Polish-era copies
@@ -599,9 +600,15 @@ cron_line_core_content() {
 }
 
 cron_line_is_obsolete() {
-    local core="$1"
+    local line="$1" trimmed core
 
-    core="$(cron_line_core_content "$1")"
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "${trimmed}" ]] || return 1
+    if [[ "${trimmed}" =~ ^# ]]; then
+        return 1
+    fi
+
+    core="$(cron_line_core_content "$line")"
     [[ -n "${core}" ]] || return 1
 
     if [[ "${core}" == *"economist-0-runme.sh"* ]]; then
