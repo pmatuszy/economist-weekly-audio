@@ -1,7 +1,9 @@
 # Copy this file to economist.local.conf and edit for your environment:
 #   cp economist.conf.example economist.local.conf
+#   chmod 600 economist.local.conf
 #
 # economist.local.conf is gitignored and must not be committed.
+# It must be mode 0600; pipeline scripts refuse to load it otherwise.
 
 # Required: personal Economist audio RSS URL (from your subscription).
 ECONOMIST_RSS_URL='https://feeds.economist.com/v1/rss/weekly/YOUR-UUID-HERE'

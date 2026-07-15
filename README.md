@@ -38,12 +38,13 @@ gh repo edit --description "Download The Economist weekly audio edition, split i
    git clone git@github.com:pmatuszy/economist-weekly-audio-private.git "${profile_location_dir:-$HOME}/github/economist-weekly-audio-private"
    ```
 
-   Keep both repos as siblings under `${profile_location_dir:-$HOME}/github/`; scripts auto-load `../economist-weekly-audio-private/economist.local.conf`.
+   Keep both repos as siblings under `${profile_location_dir:-$HOME}/github/`. Run `install.sh` to copy config into `${profile_location_dir:-$HOME}/conf/economist.local.conf`.
 
    **B. Local file** (no private repo):
 
    ```bash
    cp economist.conf.example economist.local.conf
+   chmod 600 economist.local.conf
    # edit economist.local.conf
    ```
 
@@ -92,6 +93,7 @@ ECONOMIST_CONF=/path/to/my.conf ./scripts/0-economist-runme.sh
 
 - **Public repo:** never commit `economist.local.conf` (gitignored).
 - **Private repo:** [economist-weekly-audio-private](https://github.com/pmatuszy/economist-weekly-audio-private) — your RSS URL and healthcheck pings, visible only to you.
+- **Permissions:** `economist.local.conf` must be mode `0600`. Scripts exit if the file is group- or world-readable.
 
 Others using the public repo copy `economist.conf.example` or maintain their own private config repo.
 
@@ -109,9 +111,11 @@ git clone https://github.com/pmatuszy/economist-weekly-audio.git "${profile_loca
 git clone git@github.com:pmatuszy/economist-weekly-audio-private.git "${profile_location_dir:-$HOME}/github/economist-weekly-audio-private"
 ```
 
-Keep both repos as siblings under `${profile_location_dir:-$HOME}/github/` so scripts auto-load `../economist-weekly-audio-private/economist.local.conf`.
+Keep both repos as siblings under `${profile_location_dir:-$HOME}/github/`.
 
-### 2. Interactive install into `${profile_location_dir:-$HOME}/bin`
+### 2. Interactive install into `bin/` and `conf/`
+
+`install.sh` creates `${profile_location_dir:-$HOME}/conf/` (sibling of `bin/`) and copies `economist.local.conf` there from the private repo when needed.
 
 ```bash
 cd "${profile_location_dir:-$HOME}/github/economist-weekly-audio"
@@ -119,7 +123,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-`install.sh` is interactive: it shows the repo path, config lookup, wrappers to create, and asks **Proceed with installation? [y/N]** before writing anything. Wrappers `exec` the real scripts from the repo clone.
+`install.sh` is interactive: it shows the repo path, config plan, wrappers to create, and asks **Proceed with installation? [y/N]** before writing anything.
 
 Pull latest from GitHub and install in one step:
 
@@ -156,7 +160,8 @@ Suggested layout:
 
 ```
 ${profile_location_dir:-$HOME}/github/economist-weekly-audio/          # scripts (git clone)
-${profile_location_dir:-$HOME}/github/economist-weekly-audio-private/  # economist.local.conf
+${profile_location_dir:-$HOME}/github/economist-weekly-audio-private/  # config source (git clone)
+${profile_location_dir:-$HOME}/conf/economist.local.conf              # installed secrets (mode 600)
 ${profile_location_dir:-$HOME}/bin/0-economist-runme.sh                # wrapper -> repo script
 ```
 
@@ -166,7 +171,7 @@ ${profile_location_dir:-$HOME}/bin/0-economist-runme.sh                # wrapper
 economist-weekly-audio/              # public
 ├── economist.conf.example
 ├── economist.local.conf             # optional local copy (gitignored)
-├── install.sh                       # interactive install into ${profile_location_dir:-$HOME}/bin
+├── install.sh                       # interactive install into bin/ and conf/
 └── scripts/
 
 economist-weekly-audio-private/      # private sibling clone (${profile_location_dir:-$HOME}/github/)
