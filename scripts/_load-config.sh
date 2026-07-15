@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.14 - show-available pick: single-line prompt ending with ": "
 # 2026.07.16 - v. 2.13 - show-available pick: accept leading zeros (e.g. 000010 → 10)
 # 2026.07.15 - v. 2.12 - Issue column shows Economist issue number (e.g. 9419)
 # 2026.07.15 - v. 2.11 - show-available pick prompt: Enter/Q=quit default; number=download
@@ -360,15 +361,13 @@ economist_show_and_pick_available_editions() {
         return 0
     fi
 
-    echo
-    echo "Press Enter or Q to quit (default)."
-    echo "To download: enter 1–${#pick_isos[@]} and press Enter."
+    local pick_prompt="To download: enter 1–${#pick_isos[@]} and press Enter, or Enter/Q to quit: "
 
     while true; do
         if [[ -r /dev/tty ]]; then
-            read -r -p "> " choice </dev/tty
+            read -r -p "${pick_prompt}" choice </dev/tty
         else
-            read -r -p "> " choice
+            read -r -p "${pick_prompt}" choice
         fi
 
         case "${choice}" in
