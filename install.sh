@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.9 - 2026.07.15 - config replace prompt: aligned paths, no one-liner
 # v. 1.8 - 2026.07.15 - offer to replace conf/ config from private repo (20s, default N)
 # v. 1.7 - 2026.07.15 - wrappers economist-*.sh; prompt to remove legacy numbered names
 # v. 1.6 - 2026.07.15 - prompts default no [y/N/q]; --yes still auto-yes
@@ -87,8 +88,52 @@ done
 
 CONF_DIR="$(dirname "${BIN_DIR}")/conf"
 CONF_FILE="${CONF_DIR}/economist.local.conf"
-PRIVATE_CONF="${REPO_ROOT}/../${REPO_NAME}-private/economist.local.conf"
+PRIVATE_CONF="$(cd "${REPO_ROOT}/.." && pwd)/${REPO_NAME}-private/economist.local.conf"
 LOCAL_CONF="${REPO_ROOT}/economist.local.conf"
+CONFIG_PATH_LABEL_WIDTH=8
+CONFIG_PATH_TEXT_COL=12
+
+normalize_path() {
+    local path="$1" dir base resolved=""
+
+    if [[ -e "${path}" ]]; then
+        resolved="$(readlink -f "${path}" 2>/dev/null || realpath "${path}" 2>/dev/null || true)"
+        if [[ -n "${resolved}" ]]; then
+            echo "${resolved}"
+            return 0
+        fi
+    fi
+
+    base="$(basename "${path}")"
+    dir="$(dirname "${path}")"
+    if [[ -d "${dir}" ]]; then
+        echo "$(cd "${dir}" && pwd -P)/${base}"
+    else
+        echo "${path}"
+    fi
+}
+
+print_aligned_config_path() {
+    local label="$1" path="$2" dir base
+
+    path="$(normalize_path "${path}")"
+    dir="${path%/*}"
+    base="${path##*/}"
+
+    printf "  %-${CONFIG_PATH_LABEL_WIDTH}s  %s/\n" "${label}:" "${dir}"
+    printf "%${CONFIG_PATH_TEXT_COL}s%s\n" "" "${base}"
+}
+
+print_config_replace_paths() {
+    local current resolved_private
+
+    current="$(normalize_path "${CONF_FILE}")"
+    resolved_private="$(normalize_path "${PRIVATE_CONF}")"
+
+    echo "Replace installed config with private repo copy?"
+    print_aligned_config_path "current" "${current}"
+    print_aligned_config_path "private" "${resolved_private}"
+}
 
 if [[ ! -d "${SCRIPTS_DIR}" ]]; then
     echo "Scripts directory not found: ${SCRIPTS_DIR}" >&2
@@ -216,30 +261,39 @@ check_config_permissions() {
 
 describe_config_plan() {
     if [[ -f "${CONF_FILE}" ]]; then
-        echo "  target: ${CONF_FILE} (already exists)"
+        echo "  installed:"
+        print_aligned_config_path "current" "${CONF_FILE}"
         if [[ -f "${PRIVATE_CONF}" ]]; then
-            echo "  source: ${PRIVATE_CONF} (will offer replace, ${CONFIG_REPLACE_TIMEOUT}s, default no)"
+            echo "  replace offer (${CONFIG_REPLACE_TIMEOUT}s, default no) from:"
+            print_aligned_config_path "private" "${PRIVATE_CONF}"
         fi
         check_config_permissions "${CONF_FILE}"
         return
     fi
 
     if [[ -f "${PRIVATE_CONF}" ]]; then
-        echo "  target: ${CONF_FILE} (will copy from ${PRIVATE_CONF})"
+        echo "  will install:"
+        print_aligned_config_path "target" "${CONF_FILE}"
+        echo "  from:"
+        print_aligned_config_path "private" "${PRIVATE_CONF}"
         check_config_permissions "${PRIVATE_CONF}"
         return
     fi
 
     if [[ -f "${LOCAL_CONF}" ]]; then
-        echo "  target: ${CONF_FILE} (will copy from ${LOCAL_CONF})"
+        echo "  will install:"
+        print_aligned_config_path "target" "${CONF_FILE}"
+        echo "  from:"
+        print_aligned_config_path "local" "${LOCAL_CONF}"
         check_config_permissions "${LOCAL_CONF}"
         return
     fi
 
-    echo "  target: ${CONF_FILE} (not available yet)"
+    echo "  will install:"
+    print_aligned_config_path "target" "${CONF_FILE}"
     echo "  source not found:"
-    echo "    ${PRIVATE_CONF}"
-    echo "    ${LOCAL_CONF}"
+    print_aligned_config_path "private" "${PRIVATE_CONF}"
+    print_aligned_config_path "local" "${LOCAL_CONF}"
 }
 
 install_config_file() {
@@ -248,17 +302,21 @@ install_config_file() {
     mkdir -p "${CONF_DIR}"
 
     if [[ -f "${CONF_FILE}" ]]; then
-        echo "Config: ${CONF_FILE}"
+        echo "Config:"
+        print_aligned_config_path "current" "${CONF_FILE}"
         check_config_permissions "${CONF_FILE}"
 
         if [[ -f "${PRIVATE_CONF}" ]]; then
-            read_yes_no_quit "Replace ${CONF_FILE} with ${PRIVATE_CONF}? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
+            echo
+            print_config_replace_paths
+            read_yes_no_quit "[y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
             case "${REPLY}" in
                 y)
                     check_config_permissions "${PRIVATE_CONF}"
                     cp "${PRIVATE_CONF}" "${CONF_FILE}"
                     chmod 600 "${CONF_FILE}"
-                    echo "Replaced config: ${CONF_FILE} (from ${PRIVATE_CONF})"
+                    echo "Replaced config:"
+                    print_aligned_config_path "current" "${CONF_FILE}"
                     check_config_permissions "${CONF_FILE}"
                     ;;
                 q)
@@ -266,7 +324,8 @@ install_config_file() {
                     exit 0
                     ;;
                 *)
-                    echo "Kept existing config: ${CONF_FILE}"
+                    echo "Kept existing config:"
+                    print_aligned_config_path "current" "${CONF_FILE}"
                     ;;
             esac
         fi
@@ -287,7 +346,8 @@ install_config_file() {
 
     cp "${source}" "${CONF_FILE}"
     chmod 600 "${CONF_FILE}"
-    echo "Installed config: ${CONF_FILE} (from ${source})"
+    echo "Installed config:"
+    print_aligned_config_path "current" "${CONF_FILE}"
     check_config_permissions "${CONF_FILE}"
 }
 
