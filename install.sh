@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.6 - 2026.07.15 - prompts default no [y/N/q]; --yes still auto-yes
 # v. 1.5 - 2026.07.15 - prompts default yes [Y/n/q]; --yes auto-fixes chmod 600
 # v. 1.4 - 2026.07.15 - prompts: single key [y/N/q], 300s timeout, default N
 # v. 1.3 - 2026.07.15 - install economist.local.conf into conf/ beside bin/
@@ -6,7 +7,7 @@
 # v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
 # v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
 # Interactive install: wrappers into bin/, config into conf/ (sibling directories).
-# Single-key prompts [Y/n/q] with 300s timeout; default is yes.
+# Single-key prompts [y/N/q] with 300s timeout; default is no.
 
 set -euo pipefail
 
@@ -114,9 +115,9 @@ read_yes_no_quit() {
     answer="${answer//$'\r'/}"
 
     case "${answer}" in
-        n|N) REPLY=n ;;
+        y|Y) REPLY=y ;;
         q|Q) REPLY=q ;;
-        *)   REPLY=y ;;
+        *)   REPLY=n ;;
     esac
 }
 
@@ -139,19 +140,19 @@ check_config_permissions() {
         return 0
     fi
 
-    read_yes_no_quit "Fix permissions now with chmod 600? [Y/n/q]: "
+    read_yes_no_quit "Fix permissions now with chmod 600? [y/N/q]: "
     case "${REPLY}" in
-        n)
-            echo "Installation cancelled: config file must be mode 600." >&2
-            exit 1
+        y)
+            chmod 600 "${conf_file}"
+            echo "  permissions: 600 (fixed)"
             ;;
         q)
             echo "Quit."
             exit 0
             ;;
         *)
-            chmod 600 "${conf_file}"
-            echo "  permissions: 600 (fixed)"
+            echo "Installation cancelled: config file must be mode 600." >&2
+            exit 1
             ;;
     esac
 }
@@ -236,17 +237,16 @@ case ":${PATH}:" in
         ;;
 esac
 
-read_yes_no_quit "Proceed with installation? [Y/n/q]: "
+read_yes_no_quit "Proceed with installation? [y/N/q]: "
 case "${REPLY}" in
-    n)
-        echo "Installation cancelled."
-        exit 0
-        ;;
+    y) ;;
     q)
         echo "Quit."
         exit 0
         ;;
     *)
+        echo "Installation cancelled."
+        exit 0
         ;;
 esac
 
