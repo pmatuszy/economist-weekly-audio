@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.11 - align debug label values in a fixed column
 # 2026.07.15 - v. 1.10 - clearer English debug labels
 # 2026.07.15 - v. 1.9 - dot _script_header.sh at script top level (fixes banner)
 # 2026.07.15 - v. 1.7 - Ctrl-C cleanup, pipeline summary, improved child step capture
@@ -101,6 +102,12 @@ log() {
     fi
 }
 
+log_kv() {
+    if [[ "$DEBUG" -eq 1 ]]; then
+        printf '[DEBUG] %-27s%s\n' "$1" "$2"
+    fi
+}
+
 run_pipeline_child() {
     local step="$1"
     local script="$2"
@@ -182,11 +189,11 @@ if [[ ${#edition_date_args[@]} -eq 1 ]]; then
     latest_edition=https://www.economist.com/weeklyedition/"${edition_date_args[0]}"
 fi
 
-log "Latest edition URL: ${latest_edition}"
+log_kv "Latest edition URL:" "${latest_edition}"
 
 edition_directory="${output_dir}/$(echo "${latest_edition}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
 edition_name="$(basename "${edition_directory}")"
-log "Edition output directory: ${edition_directory}"
+log_kv "Edition output directory:" "${edition_directory}"
 
 ECONOMIST_PIPELINE_EDITION_URL="${latest_edition}"
 ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
@@ -208,7 +215,7 @@ fi
 mkdir -p "${edition_directory}" 2>/dev/null
 cd "${edition_directory}"
 
-log "Current working directory: $(pwd)"
+log_kv "Current working directory:" "$(pwd)"
 
 log_part1="$(run_pipeline_child download "${SCRIPT_DIR}/economist-1-download.sh" "${args[@]}")"
 exit_code=$?
