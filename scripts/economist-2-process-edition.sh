@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 2.6 - rename chapter start/end vars; strip CR; harden set -u parsing
 # 2026.07.15 - v. 2.5 - ignore global ffmetadata title; fix unbound start/end under set -u
 # 2026.07.15 - v. 2.4 - source github-bin _script_header.sh directly (drop wrapper)
 # v. 2.1 - 2026.07.15 - renamed to economist-2-process-edition.sh
@@ -98,33 +99,34 @@ else
 fi
 
 in_chapter=0
-title=""
-start=""
-end=""
+chapter_title=""
+chapter_start=""
+chapter_end=""
 
 while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$line" =~ ^\[CHAPTER\]$ ]]; then
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^\[CHAPTER\][[:space:]]*$ ]]; then
         in_chapter=1
-        title=""
-        start=""
-        end=""
+        chapter_title=""
+        chapter_start=""
+        chapter_end=""
     elif (( in_chapter )); then
-        if [[ "$line" =~ ^START=([0-9]+)$ ]]; then
-            start=$((BASH_REMATCH[1] / 1000))
-        elif [[ "$line" =~ ^END=([0-9]+)$ ]]; then
-            end=$((BASH_REMATCH[1] / 1000))
+        if [[ "$line" =~ ^START=([0-9]+) ]]; then
+            chapter_start=$((BASH_REMATCH[1] / 1000))
+        elif [[ "$line" =~ ^END=([0-9]+) ]]; then
+            chapter_end=$((BASH_REMATCH[1] / 1000))
         elif [[ "$line" =~ ^title=(.+)$ ]]; then
-            title="${BASH_REMATCH[1]}"
-            filename=$(echo "$title.mp3" | sed 's/[^a-zA-Z0-9._-]/_/g')
+            chapter_title="${BASH_REMATCH[1]}"
+            filename=$(echo "${chapter_title}.mp3" | sed 's/[^a-zA-Z0-9._-]/_/g')
             if [[ -z "$filename" ]]; then
-                filename="chapter_${start}_${end}.mp3"
+                filename="chapter_${chapter_start:-0}_${chapter_end:-0}.mp3"
             fi
-            if [[ -n "$start" && -n "$end" && "$end" -gt "$start" ]]; then
-                echo "Processing: $filename (start=$start, end=$end)"
-                ffmpeg -hide_banner -loglevel error -y -i economist.mp3 -ss "$start" -to "$end" -c copy "$filename" < /dev/null
+            if [[ -n "${chapter_start:-}" && -n "${chapter_end:-}" && "${chapter_end}" -gt "${chapter_start}" ]]; then
+                echo "Processing: $filename (start=${chapter_start}, end=${chapter_end})"
+                ffmpeg -hide_banner -loglevel error -y -i economist.mp3 -ss "${chapter_start}" -to "${chapter_end}" -c copy "$filename" < /dev/null
                 sleep 0.1
             else
-                echo "Skipping invalid chapter: START=$start, END=$end"
+                echo "Skipping invalid chapter: START=${chapter_start:-?}, END=${chapter_end:-?}, title=${chapter_title}"
             fi
         fi
     fi
