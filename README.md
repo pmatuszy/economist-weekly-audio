@@ -123,7 +123,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-`install.sh` copies pipeline scripts into `bin/` (and `_load-config.sh`). `economist-0-runme.sh` runs sibling scripts from the same `bin/` directory. It is interactive: it shows the repo path, config plan, scripts to install, and asks **Proceed with installation? [y/N/q]** before writing anything. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old wrappers with previous naming (`0-economist-runme.sh`, `economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
+`install.sh` copies pipeline scripts into `bin/` (and `_load-config.sh`). If no config exists, it creates a starter `conf/economist.local.conf` from `economist.conf.example` — **you must edit it** (RSS URL, paths) before running the pipeline. If `conf/economist.local.conf` already exists and the private repo has a copy, it offers to replace it (**20s** timeout, default **no**). If old wrappers with previous naming (`0-economist-runme.sh`, `economist-runme.sh`, etc.) exist in `bin/`, it offers to remove them after install.
 
 Pull latest from GitHub and install in one step:
 

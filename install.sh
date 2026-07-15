@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.14 - 2026.07.15 - create starter config from example when none exists
 # v. 1.13 - 2026.07.15 - install script copies into bin/, not repo exec wrappers
 # v. 1.12 - 2026.07.15 - pipeline scripts use economist-N-*.sh names
 # v. 1.11 - 2026.07.15 - pipeline scripts restored to 0-4-economist-*.sh names
@@ -98,6 +99,7 @@ done
 
 CONF_DIR="$(dirname "${BIN_DIR}")/conf"
 CONF_FILE="${CONF_DIR}/economist.local.conf"
+EXAMPLE_CONF="${REPO_ROOT}/economist.conf.example"
 PRIVATE_CONF="$(cd "${REPO_ROOT}/.." && pwd)/${REPO_NAME}-private/economist.local.conf"
 LOCAL_CONF="${REPO_ROOT}/economist.local.conf"
 CONFIG_PATH_LABEL_WIDTH=8
@@ -298,11 +300,14 @@ describe_config_plan() {
         return
     fi
 
-    echo "  will install:"
+    echo "  No config found. A starter file will be created from economist.conf.example."
+    echo "  You must edit it before running the pipeline (RSS URL, paths, etc.)."
+    echo "  will create:"
     print_aligned_config_path "target" "${CONF_FILE}"
-    echo "  source not found:"
-    print_aligned_config_path "private" "${PRIVATE_CONF}"
-    print_aligned_config_path "local" "${LOCAL_CONF}"
+    if [[ -f "${EXAMPLE_CONF}" ]]; then
+        echo "  from:"
+        print_aligned_config_path "example" "${EXAMPLE_CONF}"
+    fi
 }
 
 install_config_file() {
@@ -346,6 +351,17 @@ install_config_file() {
     fi
 
     if [[ -z "${source}" ]]; then
+        if [[ -f "${EXAMPLE_CONF}" ]]; then
+            cp "${EXAMPLE_CONF}" "${CONF_FILE}"
+            chmod 600 "${CONF_FILE}"
+            echo
+            echo "Created starter config — edit it before running the pipeline:"
+            print_aligned_config_path "current" "${CONF_FILE}"
+            echo "Required: set ECONOMIST_RSS_URL (and adjust paths if needed)."
+            check_config_permissions "${CONF_FILE}"
+            return
+        fi
+
         echo "Config not installed: no source file found." >&2
         echo "Create ${CONF_FILE} before running the pipeline." >&2
         return
