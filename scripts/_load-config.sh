@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.20 - summary on show-available quit; result label for no selection
 # 2026.07.16 - v. 2.19 - confirm prompt reads one character like install.sh
 # 2026.07.16 - v. 2.18 - fix pick loop for bash without labeled continue
 # 2026.07.16 - v. 2.17 - show-available: confirm pick; N relists; force reprocess
@@ -582,6 +583,8 @@ economist_format_step_name() {
         cleanup_empty_dirs) echo "cleanup empty output dirs" ;;
         complete) echo "all steps completed" ;;
         already_exists) echo "skipped (edition already exists)" ;;
+        show_available) echo "show available editions" ;;
+        show_available_quit) echo "quit (no edition selected)" ;;
         "") echo "unknown" ;;
         *) echo "${step}" ;;
     esac
@@ -617,6 +620,8 @@ economist_format_runtime() {
 economist_summary_result() {
     if [[ "${ECONOMIST_STOPPED_BY_USER}" == yes ]]; then
         echo "interrupted (Ctrl-C)"
+    elif [[ "${ECONOMIST_RUN_STEP}" == "show_available_quit" ]]; then
+        echo "quit (no edition selected)"
     elif (( ECONOMIST_RUN_EXIT_CODE == 0 )); then
         echo "success"
     else
@@ -770,7 +775,11 @@ economist_print_summary() {
     economist_summary_line "Exit code:" "${ECONOMIST_RUN_EXIT_CODE}"
 
     if [[ "${ECONOMIST_RUN_MODE}" == pipeline ]]; then
-        economist_summary_line "Run:" "all steps (download → move)"
+        if [[ "${ECONOMIST_RUN_STEP}" == "show_available_quit" ]]; then
+            economist_summary_line "Run:" "show-available (no edition selected)"
+        else
+            economist_summary_line "Run:" "all steps (download → move)"
+        fi
         economist_summary_line "Edition URL:" "${ECONOMIST_PIPELINE_EDITION_URL:-}"
         economist_summary_edition_paths \
             "${ECONOMIST_PIPELINE_EDITION_DIR:-}" \

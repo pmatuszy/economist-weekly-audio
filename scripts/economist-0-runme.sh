@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.15 - print summary when user quits show-available without picking
 # 2026.07.16 - v. 1.14 - show-available confirm pick; force reprocess when confirmed
 # 2026.07.15 - v. 1.13 - --show-available lists verified RSS editions and interactive pick
 # 2026.07.15 - v. 1.12 - pipeline exit records finish time before summary
@@ -102,25 +103,31 @@ DEBUG=1
 load_economist_config
 require_economist_rss_url
 
+economist_run_control_init pipeline
+economist_install_run_traps
+
+ECONOMIST_PIPELINE_WORK_DIR="${ECONOMIST_WORK_DIR}"
+ECONOMIST_PIPELINE_OUTPUT_DIR="${ECONOMIST_OUTPUT_DIR}"
+
 if (( SHOW_AVAILABLE )); then
     if [[ ${#edition_date_args[@]} -eq 1 ]]; then
         echo "Cannot use --show-available together with an edition date." >&2
         exit 1
     fi
+    economist_set_run_step show_available
     picked_edition=""
     force_reprocess=0
     if ! economist_show_and_pick_available_editions picked_edition force_reprocess; then
-        exit 1
+        economist_set_run_step show_available_quit
+        economist_finish_run 1
     fi
     if [[ -z "${picked_edition}" ]]; then
-        exit 0
+        economist_set_run_step show_available_quit
+        economist_finish_run 0
     fi
     edition_date_args=("${picked_edition}")
     ECONOMIST_FORCE_REPROCESS="${force_reprocess}"
 fi
-
-economist_run_control_init pipeline
-economist_install_run_traps
 
 ########################################################################
 log() {
