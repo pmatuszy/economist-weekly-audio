@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 2.3 - Ctrl-C cleanup and run summary via _economist-run-control.sh
 # 2026.07.15 - v. 2.2 - _script_header.sh banner via _economist-script-header.sh
 # v. 2.1 - 2026.07.15 - renamed to economist-2-process-edition.sh
 # v. 2.0 - 2026.07.15 - restored numbered name 2-economist-process-edition.sh
@@ -20,6 +21,12 @@ source "${SCRIPT_DIR}/_economist-script-header.sh"
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_run_control_init step
+economist_install_run_traps
+economist_set_run_step process
+
 echo
 
 work_dir="${ECONOMIST_WORK_DIR}"
@@ -31,14 +38,14 @@ mp3_file="${work_dir}/economist.mp3"
 if [[ ! -s "$mp3_file" || $(stat -c%s "$mp3_file") -lt 1000000 ]]; then
   echo
   echo "❌ File $mp3_file is missing or too small. Cleaning up work directory (if empty) and exiting."
-  cd /tmp || exit 1
+  cd /tmp || economist_step_exit 1
   rmdir --ignore-fail-on-non-empty "$work_dir"
-  exit 1
+  economist_step_exit 1
 fi
 
 cd "${work_dir}" || {
   echo "Cannot change to directory ${work_dir}"
-  exit 1
+  economist_step_exit 1
 }
 
 rm -v chapters.txt 0*mp3 artwork_*jpg 2>/dev/null
@@ -73,7 +80,7 @@ if [[ -f "$artwork_file" && -s "$artwork_file" ]]; then
     file "$artwork_file"
 else
     echo "Failed to download artwork: $artwork_url"
-    exit 1
+    economist_step_exit 1
 fi
 
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -161,4 +168,4 @@ rar a -htb     -m0 _org_file.rar artwork_*jpg
 
 economist_chown_if_set _org_file.rar
 
-echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+economist_step_exit 0

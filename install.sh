@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.19 - install _economist-run-control.sh; Ctrl-C cleanup and pipeline summary
 # 2026.07.15 - v. 1.18 - banner on install; install _economist-script-header.sh into bin/
 # v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
 # v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
@@ -500,6 +501,10 @@ install_bin_scripts() {
     cp "${SCRIPTS_DIR}/_economist-script-header.sh" "${BIN_DIR}/_economist-script-header.sh"
     chmod 755 "${BIN_DIR}/_economist-script-header.sh"
     echo "Installed ${BIN_DIR}/_economist-script-header.sh"
+
+    cp "${SCRIPTS_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-run-control.sh"
+    chmod 755 "${BIN_DIR}/_economist-run-control.sh"
+    echo "Installed ${BIN_DIR}/_economist-run-control.sh"
 }
 
 print_crontab_hint() {

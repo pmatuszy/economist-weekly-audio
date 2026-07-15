@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 3.2 - Ctrl-C cleanup and run summary via _economist-run-control.sh
 # 2026.07.15 - v. 3.1 - _script_header.sh banner via _economist-script-header.sh
 # v. 3.0 - 2026.07.15 - renamed to economist-3-speedup-loudness.sh
 # v. 2.9 - 2026.07.15 - restored numbered name 3-economist-speedup-loudness.sh
@@ -18,6 +19,12 @@ source "${SCRIPT_DIR}/_economist-script-header.sh"
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
+
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_run_control_init step
+economist_install_run_traps
+economist_set_run_step speedup
 
 echo
 
@@ -67,4 +74,4 @@ pwd
 
 ls -l
 
-echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+economist_step_exit 0

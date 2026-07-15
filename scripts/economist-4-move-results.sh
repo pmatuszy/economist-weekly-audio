@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.2 - Ctrl-C cleanup and run summary via _economist-run-control.sh
 # 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
 # v. 1.0 - 2026.07.15 - renamed to economist-4-move-results.sh
 # v. 0.9 - 2026.07.15 - restored numbered name 4-economist-move-results.sh
@@ -18,6 +19,12 @@ source "${SCRIPT_DIR}/_economist-script-header.sh"
 source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_run_control_init step
+economist_install_run_traps
+economist_set_run_step move
+
 echo
 
 work_dir="${ECONOMIST_WORK_DIR}"
@@ -25,4 +32,4 @@ output_dir="${ECONOMIST_OUTPUT_DIR}"
 
 mv -v "${work_dir}"/* "${output_dir}"
 
-echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+economist_step_exit 0

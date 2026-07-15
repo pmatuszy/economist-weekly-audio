@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 3.4 - Ctrl-C cleanup and run summary via _economist-run-control.sh
 # 2026.07.15 - v. 3.3 - _script_header.sh banner via _economist-script-header.sh
 # v. 3.2 - 2026.07.15 - renamed to economist-1-download.sh
 # v. 3.1 - 2026.07.15 - restored numbered name 1-economist-download.sh
@@ -24,6 +25,12 @@ source "${SCRIPT_DIR}/_load-config.sh"
 load_economist_config
 require_economist_rss_url
 
+# shellcheck source=_economist-run-control.sh
+source "${SCRIPT_DIR}/_economist-run-control.sh"
+economist_run_control_init step
+economist_install_run_traps
+economist_set_run_step download
+
 command -v xmllint >/dev/null 2>&1 || echo "[INFO] Tip: 'xmllint' not found. Install: \
 Debian/Ubuntu: 'apt install libxml2-utils' | RHEL/CentOS: 'yum install libxml2' | Alpine: 'apk add libxml2-utils'"
 
@@ -37,7 +44,7 @@ cd "${work_dir}"
 exit_code=$?
 if (( exit_code != 0 )); then
    echo "Something went wrong — cannot change to directory \"${work_dir}\" (exit code ${exit_code})"
-   exit "${exit_code}"
+   economist_step_exit "${exit_code}"
 fi
 
 pwd
@@ -48,7 +55,7 @@ if [[ -f "${work_dir}/economist.mp3" ]]; then
   echo "Also removing empty work directory ${work_dir}"
   echo "STOPPING"
   echo
-  exit 1
+  economist_step_exit 1
 fi
 
 cd "${work_dir}"
@@ -97,7 +104,7 @@ if [[ $# -eq 0 ]]; then
   download_url="$(grep -oP '<enclosure url="\K[^"]+' economist.rss | head -n 1 || true)"
 else
   iso="$1"
-  pos="$(weeks_position_from_date "$iso")" || { echo "[INFO] Failed to compute RSS position for date: $iso"; rm -f economist.rss; exit 1; }
+  pos="$(weeks_position_from_date "$iso")" || { echo "[INFO] Failed to compute RSS position for date: $iso"; rm -f economist.rss; economist_step_exit 1; }
 
   item_count=0
   if command -v xmllint >/dev/null 2>&1; then
@@ -116,7 +123,7 @@ else
   if [[ "$pos" -le 0 || "$pos" -gt "$item_count" ]]; then
     echo "No feed item at position $pos (feed has $item_count items)." >&2
     rm -f economist.rss
-    exit 2
+    economist_step_exit 2
   fi
 
   if command -v xmllint >/dev/null 2>&1 && [[ "$item_count" -gt 0 ]]; then
@@ -133,7 +140,7 @@ fi
 if [[ -z "${download_url}" ]]; then
   echo "No download URL found in economist.rss." >&2
   rm -f economist.rss
-  exit 1
+  economist_step_exit 1
 fi
 
 rm -f economist.rss
@@ -147,10 +154,10 @@ wget --max-redirect=5 "${download_url}" -O economist.mp3 2>/dev/null
 
 if [[ ! -s economist.mp3 ]]; then
   echo "economist.mp3 is missing or empty. Cleaning up work directory."
-  cd /tmp || exit 1
+  cd /tmp || economist_step_exit 1
   rmdir "${work_dir}"
-  exit 1
+  economist_step_exit 1
 fi
 
 echo "[INFO] OK — downloaded economist.mp3 ($(du -h economist.mp3 | awk '{print $1}'))"
-echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
+economist_step_exit 0
