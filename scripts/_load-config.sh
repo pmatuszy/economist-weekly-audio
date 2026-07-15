@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.19 - confirm prompt reads one character like install.sh
 # 2026.07.16 - v. 2.18 - fix pick loop for bash without labeled continue
 # 2026.07.16 - v. 2.17 - show-available: confirm pick; N relists; force reprocess
 # 2026.07.16 - v. 2.15 - show-available list: oldest first, newest at bottom
@@ -283,6 +284,22 @@ economist_read_tty_line() {
     fi
 }
 
+economist_read_tty_char() {
+    local prompt="$1"
+    local -n _char_ref="$2"
+    local timeout="${3:-300}"
+
+    _char_ref=""
+    echo -n "${prompt}"
+    if [[ -r /dev/tty ]]; then
+        read -t "${timeout}" -n 1 _char_ref </dev/tty || _char_ref=""
+    else
+        read -t "${timeout}" -n 1 _char_ref || _char_ref=""
+    fi
+    echo
+    _char_ref="${_char_ref//$'\r'/}"
+}
+
 economist_force_reprocess_edition() {
     local edition_dir="$1" work_dir="$2"
 
@@ -447,7 +464,7 @@ economist_show_and_pick_available_editions() {
         fi
 
         while true; do
-            economist_read_tty_line "${confirm_prompt}" confirm
+            economist_read_tty_char "${confirm_prompt}" confirm
 
             case "${confirm}" in
                 q|Q)
