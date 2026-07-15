@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.11 - show-available pick prompt: Enter/Q=quit default; number=download
 # 2026.07.15 - v. 2.10 - show-available table: Issue column (RSS feed position)
 # 2026.07.15 - v. 2.9 - show-available: progress dots; Enter defaults to quit
 # 2026.07.15 - v. 2.8 - RSS list/verify helpers; interactive --show-available picker
@@ -332,11 +333,15 @@ economist_show_and_pick_available_editions() {
         return 0
     fi
 
+    echo
+    echo "Press Enter or Q to quit (default)."
+    echo "To download: enter 1–${#pick_positions[@]} and press Enter."
+
     while true; do
         if [[ -r /dev/tty ]]; then
-            read -r -p "Pick edition [1-${#pick_positions[@]}] (Enter/q=quit): " choice </dev/tty
+            read -r -p "> " choice </dev/tty
         else
-            read -r -p "Pick edition [1-${#pick_positions[@]}] (Enter/q=quit): " choice
+            read -r -p "> " choice
         fi
 
         case "${choice}" in
@@ -344,7 +349,7 @@ economist_show_and_pick_available_editions() {
                 return 0
                 ;;
             *[!0-9]*)
-                echo "Enter a number from 1 to ${#pick_positions[@]}, or press Enter to quit."
+                echo "Invalid input — enter 1–${#pick_positions[@]} to download, or press Enter to quit."
                 ;;
             *)
                 if (( choice >= 1 && choice <= ${#pick_positions[@]} )); then
@@ -352,7 +357,7 @@ economist_show_and_pick_available_editions() {
                     echo "Selected edition: ${_picked_iso_ref}"
                     return 0
                 fi
-                echo "Enter a number from 1 to ${#pick_positions[@]}, or press Enter to quit."
+                echo "Invalid input — enter 1–${#pick_positions[@]} to download, or press Enter to quit."
                 ;;
         esac
     done
