@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.5 - 2026.07.15 - Polish local variable names translated to English
 # v. 2.4 - 2026.06.19 - runtime messages translated to English
 # v. 2.3 - 2026.06.19 - changelog comments translated to English
 # v. 2.2 - 2026.06.19 - renamed from 3-zmien-szybkosc-podbij-glosnosc.sh
@@ -13,37 +14,37 @@ load_economist_config
 echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
 ffmpeg_path="${FFMPEG_PATH}"
-katalog_zrodlowy="${ECONOMIST_WORK_DIR}"
+work_dir="${ECONOMIST_WORK_DIR}"
 
-ls -l "$katalog_zrodlowy"
+ls -l "$work_dir"
 
-czy_robimy_pliki_mono="  -ac 1 "
+mono_flag="  -ac 1 "
 
-o_ile_przyspieszyc=1.7
-ffmpeg_kill_po_tylu_sekundach=60
+speed_factor=1.7
+ffmpeg_timeout_seconds=60
 
-ffmpeg_rozne_generic_parametry=" -y -hide_banner -loglevel error "
+ffmpeg_common_args=" -y -hide_banner -loglevel error "
 
-usun_cisze="silenceremove=stop_periods=-1:stop_duration=0.2:stop_threshold=-48dB"
+silence_removal_filter="silenceremove=stop_periods=-1:stop_duration=0.2:stop_threshold=-48dB"
 equalizer="firequalizer=gain_entry='entry(0,-8);entry(250,-6);entry(1000,-8);entry(4000,0)'"
-przyspieszenie="atempo=${o_ile_przyspieszyc}"
-norm_glosu="speechnorm=expansion=20[po_normalizacji];[po_normalizacji]apad=pad_dur=1s"
+speedup_filter="atempo=${speed_factor}"
+speech_norm_filter="speechnorm=expansion=20[after_normalization];[after_normalization]apad=pad_dur=1s"
 
-plik_wyn_ext=mp3
+output_ext=mp3
 
-for p in $(find "${katalog_zrodlowy}" -type f -not -name \*SPEECHNORM_SPEEDUP\* -name \*mp3 | sort); do
-   export rozszerzenie="${p##*.}"
-   plik_wynikowy="$(dirname "${p}")/$(basename "${p}" '.'"${rozszerzenie}")_SPEECHNORM_SPEEDUP_${o_ile_przyspieszyc}.${plik_wyn_ext}"
+for p in $(find "${work_dir}" -type f -not -name \*SPEECHNORM_SPEEDUP\* -name \*mp3 | sort); do
+   export extension="${p##*.}"
+   output_file="$(dirname "${p}")/$(basename "${p}" '.'"${extension}")_SPEECHNORM_SPEEDUP_${speed_factor}.${output_ext}"
 
    if [ -f "$p" ]; then
-     /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_kill_po_tylu_sekundach}" "${ffmpeg_path}" ${ffmpeg_rozne_generic_parametry} \
-       -i "$p" $czy_robimy_pliki_mono -filter:a "${usun_cisze},${equalizer},${przyspieszenie}" "${p}_tymcz.${plik_wyn_ext}"
-     /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_kill_po_tylu_sekundach}" "${ffmpeg_path}" ${ffmpeg_rozne_generic_parametry} \
-       -i "${p}_tymcz.${plik_wyn_ext}" $czy_robimy_pliki_mono -filter_complex:a "${norm_glosu}" "$plik_wynikowy"
-     chmod --reference="${p}" "$plik_wynikowy"
-     chown --reference="${p}" "$plik_wynikowy"
-     touch --reference="${p}" "$plik_wynikowy"
-     rm "${p}_tymcz.${plik_wyn_ext}" "$p"
+     /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_timeout_seconds}" "${ffmpeg_path}" ${ffmpeg_common_args} \
+       -i "$p" $mono_flag -filter:a "${silence_removal_filter},${equalizer},${speedup_filter}" "${p}_tmp.${output_ext}"
+     /usr/bin/timeout --verbose --kill-after=10 --foreground "${ffmpeg_timeout_seconds}" "${ffmpeg_path}" ${ffmpeg_common_args} \
+       -i "${p}_tmp.${output_ext}" $mono_flag -filter_complex:a "${speech_norm_filter}" "$output_file"
+     chmod --reference="${p}" "$output_file"
+     chown --reference="${p}" "$output_file"
+     touch --reference="${p}" "$output_file"
+     rm "${p}_tmp.${output_ext}" "$p"
    else
      echo "File $p does not exist — skipping ffmpeg"
    fi
@@ -51,7 +52,7 @@ for p in $(find "${katalog_zrodlowy}" -type f -not -name \*SPEECHNORM_SPEEDUP\* 
 done
 
 pwd
-cd "${katalog_zrodlowy}"
+cd "${work_dir}"
 pwd
 cd "$(dirname "${p}")"
 pwd

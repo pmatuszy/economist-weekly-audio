@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 2.9 - 2026.07.15 - Polish local variable names translated to English
 # v. 2.8 - 2026.06.19 - runtime messages translated to English
 # v. 2.7 - 2026.06.19 - changelog comments translated to English
 # v. 2.6 - 2026.06.19 - renamed from 1-economist-sciagnij.sh
@@ -22,31 +23,29 @@ Debian/Ubuntu: 'apt install libxml2-utils' | RHEL/CentOS: 'yum install libxml2' 
 echo
 echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
-katalog_roboczy="${ECONOMIST_WORK_DIR}"
-kat_zrodlowy="${ECONOMIST_BASE_DIR}"
-kat_wynikowy="${ECONOMIST_OUTPUT_DIR}"
+work_dir="${ECONOMIST_WORK_DIR}"
 
-mkdir -p "${katalog_roboczy}" 2>/dev/null
-cd "${katalog_roboczy}"
+mkdir -p "${work_dir}" 2>/dev/null
+cd "${work_dir}"
 
-kod_powrotu=$?
-if (( kod_powrotu != 0 )); then
-   echo "Something went wrong — cannot change to directory \"${katalog_roboczy}\" (exit code ${kod_powrotu})"
-   exit "${kod_powrotu}"
+exit_code=$?
+if (( exit_code != 0 )); then
+   echo "Something went wrong — cannot change to directory \"${work_dir}\" (exit code ${exit_code})"
+   exit "${exit_code}"
 fi
 
 pwd
 
-if [[ -f "${katalog_roboczy}/economist.mp3" ]]; then
+if [[ -f "${work_dir}/economist.mp3" ]]; then
   echo
-  echo "File ${katalog_roboczy}/economist.mp3 already exists — not downloading again"
-  echo "Also removing empty work directory ${katalog_roboczy}"
+  echo "File ${work_dir}/economist.mp3 already exists — not downloading again"
+  echo "Also removing empty work directory ${work_dir}"
   echo "STOPPING"
   echo
   exit 1
 fi
 
-cd "${katalog_roboczy}"
+cd "${work_dir}"
 
 rm -f economist.rss 2>/dev/null
 echo "[INFO] Fetching RSS: ${ECONOMIST_RSS_URL}"
@@ -143,7 +142,7 @@ wget --max-redirect=5 "${download_url}" -O economist.mp3 2>/dev/null
 if [[ ! -s economist.mp3 ]]; then
   echo "economist.mp3 is missing or empty. Cleaning up work directory."
   cd /tmp || exit 1
-  rmdir "${katalog_roboczy}"
+  rmdir "${work_dir}"
   exit 1
 fi
 

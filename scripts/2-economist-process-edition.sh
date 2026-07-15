@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 1.7 - 2026.07.15 - Polish local variable names translated to English
 # v. 1.6 - 2026.06.19 - runtime messages translated to English
 # v. 1.5 - 2026.06.19 - changelog comments translated to English
 # v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
@@ -14,23 +15,22 @@ load_economist_config
 
 echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
-kat_zrodlowy="${ECONOMIST_BASE_DIR}"
-kat_wynikowy="${ECONOMIST_WORK_DIR}"
+work_dir="${ECONOMIST_WORK_DIR}"
 
-mkdir -p "${kat_wynikowy}"
+mkdir -p "${work_dir}"
 
-mp3_file="${kat_wynikowy}/economist.mp3"
+mp3_file="${work_dir}/economist.mp3"
 
 if [[ ! -s "$mp3_file" || $(stat -c%s "$mp3_file") -lt 1000000 ]]; then
   echo
   echo "❌ File $mp3_file is missing or too small. Cleaning up work directory (if empty) and exiting."
   cd /tmp || exit 1
-  rmdir --ignore-fail-on-non-empty "$kat_wynikowy"
+  rmdir --ignore-fail-on-non-empty "$work_dir"
   exit 1
 fi
 
-cd "${kat_wynikowy}" || {
-  echo "Cannot change to directory ${kat_wynikowy}"
+cd "${work_dir}" || {
+  echo "Cannot change to directory ${work_dir}"
   exit 1
 }
 

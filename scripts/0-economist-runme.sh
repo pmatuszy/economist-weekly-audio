@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.1 - 2026.07.15 - Polish local variable names translated to English
 # v. 1.0 - 2026.06.19 - runtime messages translated to English
 # v. 0.9 - 2026.06.19 - changelog comments translated to English
 # v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
@@ -42,25 +43,25 @@ hc_ping "/start"
 wget_params="User-Agent: Mozilla/5.0"
 economist_url="https://www.economist.com/weeklyedition/"
 
-katalog_roboczy="${ECONOMIST_WORK_DIR}"
+work_dir="${ECONOMIST_WORK_DIR}"
 
-mkdir -p "${katalog_roboczy}" 2>/dev/null
-cd "${katalog_roboczy}"
+mkdir -p "${work_dir}" 2>/dev/null
+cd "${work_dir}"
 
-kod_powrotu=$?
-if (( kod_powrotu != 0 )); then
-   echo "Something went wrong — cannot change to directory \"${katalog_roboczy}\" (exit code ${kod_powrotu})"
-   exit $kod_powrotu
+exit_code=$?
+if (( exit_code != 0 )); then
+   echo "Something went wrong — cannot change to directory \"${work_dir}\" (exit code ${exit_code})"
+   exit $exit_code
 fi
 
-kat_wynikowy="${ECONOMIST_OUTPUT_DIR}"
+output_dir="${ECONOMIST_OUTPUT_DIR}"
 
 export wget_params economist_url
 
 UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
 ARCHIVE='https://www.economist.com/weeklyedition/archive'
 
-najnowsze_wydanie="$(
+latest_edition="$(
   wget -qO- --user-agent="$UA" \
     --header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
     --header='Accept-Language: en-US,en;q=0.9' \
@@ -75,75 +76,75 @@ najnowsze_wydanie="$(
 )"
 
 if [[ "$#" -eq 1 ]]; then
-  najnowsze_wydanie=https://www.economist.com/weeklyedition/"$1"
+  latest_edition=https://www.economist.com/weeklyedition/"$1"
 fi
 
-log "latest_edition = $najnowsze_wydanie"
+log "latest_edition = $latest_edition"
 
-nazwa_katalogu="${kat_wynikowy}/$(echo "${najnowsze_wydanie}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
-log "edition_directory = $nazwa_katalogu"
+edition_directory="${output_dir}/$(echo "${latest_edition}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
+log "edition_directory = $edition_directory"
 
-if [[ -d "${nazwa_katalogu}" && $(/bin/ls -A "${nazwa_katalogu}") ]]; then
-   log_cz1=$( echo ;  echo ;
-   echo "Directory ${nazwa_katalogu} exists and is not empty";
+if [[ -d "${edition_directory}" && $(/bin/ls -A "${edition_directory}") ]]; then
+   log_part1=$( echo ;  echo ;
+   echo "Directory ${edition_directory} exists and is not empty";
    echo "Will not download this edition again...";
    echo "... exiting.";)
-   hc_ping "" "${log_cz1}"
-   log "$log_cz1"
+   hc_ping "" "${log_part1}"
+   log "$log_part1"
    exit 0
 fi
 
-mkdir -p "${nazwa_katalogu}" 2>/dev/null
-cd "${nazwa_katalogu}"
+mkdir -p "${edition_directory}" 2>/dev/null
+cd "${edition_directory}"
 
 log "working directory: $(pwd)"
 
-log_cz1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
-kod_powrotu=$?
+log_part1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
+exit_code=$?
 
 log "output from ${SCRIPT_DIR}/1-economist-download.sh:"
-log "$log_cz1"
+log "$log_part1"
 log ""
 
-log "exit code from ${SCRIPT_DIR}/1-economist-download.sh = $kod_powrotu"
+log "exit code from ${SCRIPT_DIR}/1-economist-download.sh = $exit_code"
 
-if [[ $kod_powrotu -eq 2 ]]; then
-  hc_ping "" "${log_cz1}"
-  echo "Cleaning up incomplete directory: ${nazwa_katalogu}"
-  rmdir --ignore-fail-on-non-empty "${nazwa_katalogu}"
-  exit $kod_powrotu
+if [[ $exit_code -eq 2 ]]; then
+  hc_ping "" "${log_part1}"
+  echo "Cleaning up incomplete directory: ${edition_directory}"
+  rmdir --ignore-fail-on-non-empty "${edition_directory}"
+  exit $exit_code
 fi
 
-log_cz2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
-kod_powrotu=$?
+log_part2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
+exit_code=$?
 
 log "output from ${SCRIPT_DIR}/2-economist-process-edition.sh:"
-log "$log_cz2"
+log "$log_part2"
 log ""
 
-if [[ $kod_powrotu -ne 0 ]]; then
-  hc_ping "/fail" "${log_cz1}${log_cz2}"
-  echo "Cleaning up incomplete directory: ${nazwa_katalogu}"
-  rmdir --ignore-fail-on-non-empty "${nazwa_katalogu}"
-  exit $kod_powrotu
+if [[ $exit_code -ne 0 ]]; then
+  hc_ping "/fail" "${log_part1}${log_part2}"
+  echo "Cleaning up incomplete directory: ${edition_directory}"
+  rmdir --ignore-fail-on-non-empty "${edition_directory}"
+  exit $exit_code
 fi
 
-log_cz3=$(echo ; "${SCRIPT_DIR}/3-economist-speedup-loudness.sh" ; exit $?)
-kod_powrotu=$?
+log_part3=$(echo ; "${SCRIPT_DIR}/3-economist-speedup-loudness.sh" ; exit $?)
+exit_code=$?
 
-if [[ $kod_powrotu -ne 0 ]]; then
-  hc_ping "/fail" "${log_cz1}${log_cz2}${log_cz3}"
-  echo "Cleaning up incomplete directory: ${nazwa_katalogu}"
-  rmdir --ignore-fail-on-non-empty "${nazwa_katalogu}"
-  exit $kod_powrotu
+if [[ $exit_code -ne 0 ]]; then
+  hc_ping "/fail" "${log_part1}${log_part2}${log_part3}"
+  echo "Cleaning up incomplete directory: ${edition_directory}"
+  rmdir --ignore-fail-on-non-empty "${edition_directory}"
+  exit $exit_code
 fi
 
-log_cz4=$(echo ; "${SCRIPT_DIR}/4-economist-move-results.sh" ; exit $?)
-kod_powrotu=$?
+log_part4=$(echo ; "${SCRIPT_DIR}/4-economist-move-results.sh" ; exit $?)
+exit_code=$?
 
-if [[ $kod_powrotu -ne 0 ]]; then
-  hc_ping "/fail" "${log_cz1}${log_cz2}${log_cz3}${log_cz4}"
-  exit $kod_powrotu
+if [[ $exit_code -ne 0 ]]; then
+  hc_ping "/fail" "${log_part1}${log_part2}${log_part3}${log_part4}"
+  exit $exit_code
 fi
 
-hc_ping "" "${log_cz1}${log_cz2}${log_cz3}${log_cz4}"
+hc_ping "" "${log_part1}${log_part2}${log_part3}${log_part4}"

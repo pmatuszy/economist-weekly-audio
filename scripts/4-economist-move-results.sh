@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 0.6 - 2026.07.15 - Polish local variable names translated to English
 # v. 0.5 - 2026.06.19 - runtime messages translated to English
 # v. 0.4 - 2026.06.19 - changelog comments translated to English
 # v. 0.3 - 2026.06.19 - renamed from 4-wszystko-obrobione-przenies-wyniki.sh
@@ -12,9 +13,9 @@ load_economist_config
 
 echo "---- Script start: $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
 
-kat_zrodlowy="${ECONOMIST_WORK_DIR}"
-kat_wynikowy="${ECONOMIST_OUTPUT_DIR}"
+work_dir="${ECONOMIST_WORK_DIR}"
+output_dir="${ECONOMIST_OUTPUT_DIR}"
 
-mv -v "${kat_zrodlowy}"/* "${kat_wynikowy}"
+mv -v "${work_dir}"/* "${output_dir}"
 
 echo "---- Script end:   $0 ($(date '+%Y.%m.%d %H:%M:%S'))"
