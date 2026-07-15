@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
+# v. 1.0 - 2026.07.15 - renamed to economist-4-move-results.sh
 # v. 0.9 - 2026.07.15 - restored numbered name 4-economist-move-results.sh
-# v. 0.8 - 2026.07.15 - renamed from 4-economist-move-results.sh
 # v. 0.7 - 2026.07.15 - added script description header
 # v. 0.5 - 2026.06.19 - runtime messages translated to English
 # v. 0.4 - 2026.06.19 - changelog comments translated to English

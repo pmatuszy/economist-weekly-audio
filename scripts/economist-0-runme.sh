@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+# v. 1.4 - 2026.07.15 - call economist-1..4-*.sh child scripts
+# v. 1.4 - 2026.07.15 - renamed to economist-0-runme.sh
 # v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
-# v. 1.2 - 2026.07.15 - renamed from 0-economist-runme.sh
 # v. 1.1 - 2026.07.15 - added script description header
 # v. 1.0 - 2026.06.19 - runtime messages translated to English
 # v. 0.9 - 2026.06.19 - changelog comments translated to English
@@ -102,14 +103,14 @@ cd "${edition_directory}"
 
 log "working directory: $(pwd)"
 
-log_part1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
+log_part1=$(echo ; "${SCRIPT_DIR}/economist-1-download.sh" "${args[@]}" ; exit $?)
 exit_code=$?
 
-log "output from ${SCRIPT_DIR}/1-economist-download.sh:"
+log "output from ${SCRIPT_DIR}/economist-1-download.sh:"
 log "$log_part1"
 log ""
 
-log "exit code from ${SCRIPT_DIR}/1-economist-download.sh = $exit_code"
+log "exit code from ${SCRIPT_DIR}/economist-1-download.sh = $exit_code"
 
 if [[ $exit_code -eq 2 ]]; then
   hc_ping "" "${log_part1}"
@@ -118,10 +119,10 @@ if [[ $exit_code -eq 2 ]]; then
   exit $exit_code
 fi
 
-log_part2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
+log_part2=$(echo ; "${SCRIPT_DIR}/economist-2-process-edition.sh" "${args[@]}" ; exit $?)
 exit_code=$?
 
-log "output from ${SCRIPT_DIR}/2-economist-process-edition.sh:"
+log "output from ${SCRIPT_DIR}/economist-2-process-edition.sh:"
 log "$log_part2"
 log ""
 
@@ -132,7 +133,7 @@ if [[ $exit_code -ne 0 ]]; then
   exit $exit_code
 fi
 
-log_part3=$(echo ; "${SCRIPT_DIR}/3-economist-speedup-loudness.sh" ; exit $?)
+log_part3=$(echo ; "${SCRIPT_DIR}/economist-3-speedup-loudness.sh" ; exit $?)
 exit_code=$?
 
 if [[ $exit_code -ne 0 ]]; then
@@ -142,7 +143,7 @@ if [[ $exit_code -ne 0 ]]; then
   exit $exit_code
 fi
 
-log_part4=$(echo ; "${SCRIPT_DIR}/4-economist-move-results.sh" ; exit $?)
+log_part4=$(echo ; "${SCRIPT_DIR}/economist-4-move-results.sh" ; exit $?)
 exit_code=$?
 
 if [[ $exit_code -ne 0 ]]; then

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.12 - 2026.07.15 - pipeline scripts use economist-N-*.sh names
 # v. 1.11 - 2026.07.15 - pipeline scripts restored to 0-4-economist-*.sh names
 # v. 1.10 - 2026.07.15 - config replace: description, paths, then prompt line
 # v. 1.9 - 2026.07.15 - config replace prompt: aligned paths, no one-liner
@@ -11,7 +12,7 @@
 # v. 1.2 - 2026.07.15 - check private config file permissions are 600
 # v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
 # v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
-# Interactive install: numbered 0-4-economist-*.sh wrappers into bin/, config into conf/.
+# Interactive install: economist-N-*.sh wrappers into bin/, config into conf/.
 # Single-key prompts [y/N/q] with 300s timeout; default is no.
 
 set -euo pipefail
@@ -28,6 +29,11 @@ DO_PULL=0
 ASSUME_YES=0
 
 LEGACY_WRAPPER_NAMES=(
+    "0-economist-runme.sh"
+    "1-economist-download.sh"
+    "2-economist-process-edition.sh"
+    "3-economist-speedup-loudness.sh"
+    "4-economist-move-results.sh"
     "economist-runme.sh"
     "economist-download.sh"
     "economist-process-edition.sh"
@@ -46,7 +52,7 @@ Expected layout:
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}/                 # this repo
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}-private/         # optional secrets source
   \${profile_location_dir:-\$HOME}/conf/economist.local.conf             # installed config (mode 600)
-  \${profile_location_dir:-\$HOME}/bin/0-economist-runme.sh             # installed wrappers
+  \${profile_location_dir:-\$HOME}/bin/economist-0-runme.sh             # installed wrappers
 
 Options:
   --bin-dir PATH   Target bin directory (default: \${profile_location_dir:-\$HOME}/bin)
@@ -149,7 +155,7 @@ if (( DO_PULL )); then
     fi
 fi
 
-mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f -name '[0-9]-economist-*.sh' | sort)
+mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f -name 'economist-[0-9]-*.sh' | sort)
 
 if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
     echo "No installable scripts found in ${SCRIPTS_DIR}" >&2
@@ -419,4 +425,4 @@ remove_legacy_wrappers
 
 echo
 echo "Done. Run the pipeline with:"
-echo "  ${BIN_DIR}/0-economist-runme.sh"
+echo "  ${BIN_DIR}/economist-0-runme.sh"
