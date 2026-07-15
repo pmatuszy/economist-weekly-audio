@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.3 - discard local scripts/ edits before git pull (-y)
 # 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (drop wrapper)
 # 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
 # 2026.07.15 - v. 1.0 - clone/pull economist repos under github/ and run install.sh
@@ -129,6 +130,28 @@ setup_git_ssh() {
     fi
 }
 
+economist_git_prepare_pull() {
+    local dir="$1" assume_yes="${2:-0}" dirty=""
+
+    [[ -d "${dir}/.git" ]] || return 0
+
+    dirty="$(git -C "${dir}" status --porcelain -- scripts/ install.sh 2>/dev/null || true)"
+    [[ -n "${dirty}" ]] || return 0
+
+    if (( assume_yes )); then
+        echo "Note: discarding local changes under scripts/ and install.sh before git pull."
+        echo "      Edit /root/bin/ or push changes from your dev machine — not the server clone."
+        git -C "${dir}" checkout -- scripts/ install.sh 2>/dev/null || true
+        return 0
+    fi
+
+    echo "Local changes would block git pull in ${dir}:" >&2
+    git -C "${dir}" status --short -- scripts/ install.sh >&2
+    echo "Fix: git -C \"${dir}\" checkout -- scripts/ install.sh" >&2
+    echo "Or:  economist-script-reinstall.sh -y  (auto-discards script changes)" >&2
+    return 1
+}
+
 sync_repo() {
     local dir="$1" url="$2" label="$3"
     local rc=0
@@ -142,6 +165,7 @@ sync_repo() {
         echo "  from: ${url}"
         git clone "${url}" "${dir}" || rc=$?
     else
+        economist_git_prepare_pull "${dir}" "${ASSUME_YES}" || return 1
         echo
         echo "Pulling ${label}..."
         echo "  repo: ${dir}"
