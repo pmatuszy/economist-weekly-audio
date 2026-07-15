@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.25 - skip cron migration when active economist-0-runme jobs already exist
 # 2026.07.15 - v. 1.24 - ignore already-commented cron lines when detecting obsolete entries
 # 2026.07.15 - v. 1.23 - after cron migration show old (commented) and new sections
 # 2026.07.15 - v. 1.22 - offer to comment out obsolete economist cron lines and add new block
@@ -658,6 +659,33 @@ cron_line_is_obsolete() {
     return 1
 }
 
+crontab_has_active_economist_jobs() {
+    local crontab_content="$1" line trimmed
+    local has_run_var=0 has_run_job=0
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        trimmed="${line#"${line%%[![:space:]]*}"}"
+        [[ -n "${trimmed}" ]] || continue
+        if [[ "${trimmed}" =~ ^# ]]; then
+            continue
+        fi
+        if [[ "${trimmed}" == *"economist-0-runme.sh"* ]]; then
+            return 0
+        fi
+        if [[ "${trimmed}" == ECONOMIST_RUN=* ]]; then
+            has_run_var=1
+        fi
+        if [[ "${trimmed}" == *'${ECONOMIST_RUN}'* ]]; then
+            has_run_job=1
+        fi
+    done <<< "${crontab_content}"
+
+    if (( has_run_var && has_run_job )); then
+        return 0
+    fi
+    return 1
+}
+
 build_economist_cron_paths() {
     ECON_CRON_RUN_SCRIPT="${BIN_DIR}/economist-0-runme.sh"
     ECON_CRON_LOCK_FILE="${BASE_DIR}/var/lock/economist-runme.lock"
@@ -753,21 +781,30 @@ offer_crontab_obsolete_migration() {
         return 0
     fi
 
-    if [[ "${current_crontab}" == *"${BIN_DIR}/economist-0-runme.sh"* ]]; then
+    if crontab_has_active_economist_jobs "${current_crontab}"; then
+        has_new_cron=1
+        echo "Crontab already has active economist-0-runme.sh jobs — will not add a new block."
+        echo
+        if [[ ${#obsolete_lines[@]} -eq 0 ]]; then
+            return 0
+        fi
+        echo "Only active (uncommented) obsolete lines will be commented out."
+        echo
+    elif [[ "${current_crontab}" == *"${BIN_DIR}/economist-0-runme.sh"* ]]; then
         has_new_cron=1
     fi
 
-    print_section "Obsolete economist cron entries"
+    print_section "Obsolete economist cron entries (active lines only)"
     echo "Found ${#obsolete_lines[@]} obsolete line(s) in your crontab:"
     for line in "${obsolete_lines[@]}"; do
         echo "  ${line}"
     done
     echo
     if (( has_new_cron )); then
-        echo "Your crontab already contains ${BIN_DIR}/economist-0-runme.sh"
-        echo "Obsolete lines will be commented out together; no new block will be added."
+        echo "Your crontab already has current economist-0-runme.sh jobs."
+        echo "Active obsolete lines will be commented out; no new block will be added."
     else
-        echo "Obsolete lines will be commented out and replaced with a new economist block."
+        echo "Active obsolete lines will be commented out and replaced with a new economist block."
     fi
     echo
 
