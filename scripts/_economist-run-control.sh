@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 1.4 - summary includes runtime, result, and aligned labels
 # 2026.07.15 - v. 1.3 - dot _script_header.sh at caller top level (fixes banner/version)
 # 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (no wrapper)
 # 2026.07.15 - v. 1.1 - child scripts skip summary when ECONOMIST_PIPELINE_PARENT is set
@@ -36,7 +37,10 @@ economist_find_script_header_file() {
 : "${ECONOMIST_CLEANUP_DONE:=0}"
 : "${ECONOMIST_RUN_MODE:=step}"
 : "${ECONOMIST_SCRIPT_START_TIME:=}"
+: "${ECONOMIST_SCRIPT_START_EPOCH:=0}"
 : "${ECONOMIST_SCRIPT_FINISH_TIME:=}"
+: "${ECONOMIST_SCRIPT_FINISH_EPOCH:=0}"
+: "${ECONOMIST_SCRIPT_NAME:=}"
 : "${ECONOMIST_RUN_STEP:=init}"
 : "${ECONOMIST_RUN_EXIT_CODE:=0}"
 
@@ -50,9 +54,49 @@ economist_run_control_init() {
     local mode="${1:-step}"
 
     ECONOMIST_RUN_MODE="${mode}"
+    ECONOMIST_SCRIPT_NAME="$(basename "${BASH_SOURCE[1]}")"
     ECONOMIST_SCRIPT_START_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+    ECONOMIST_SCRIPT_START_EPOCH="$(date +%s)"
+    ECONOMIST_SCRIPT_FINISH_TIME=""
+    ECONOMIST_SCRIPT_FINISH_EPOCH=0
     ECONOMIST_RUN_STEP=init
     ECONOMIST_RUN_EXIT_CODE=0
+}
+
+economist_summary_line() {
+    printf '%-27s%s\n' "$1" "$2"
+}
+
+economist_format_runtime() {
+    local elapsed="$1" hours minutes seconds
+
+    (( elapsed < 0 )) && elapsed=0
+    hours=$((elapsed / 3600))
+    minutes=$(((elapsed % 3600) / 60))
+    seconds=$((elapsed % 60))
+
+    if (( hours > 0 )); then
+        printf '%dh %dm %ds' "${hours}" "${minutes}" "${seconds}"
+    elif (( minutes > 0 )); then
+        printf '%dm %ds' "${minutes}" "${seconds}"
+    else
+        printf '%ds' "${seconds}"
+    fi
+}
+
+economist_summary_result() {
+    if [[ "${ECONOMIST_STOPPED_BY_USER}" == yes ]]; then
+        echo "interrupted (Ctrl-C)"
+    elif (( ECONOMIST_RUN_EXIT_CODE == 0 )); then
+        echo "success"
+    else
+        echo "failed (exit ${ECONOMIST_RUN_EXIT_CODE})"
+    fi
+}
+
+economist_mark_finish_time() {
+    ECONOMIST_SCRIPT_FINISH_EPOCH="$(date +%s)"
+    ECONOMIST_SCRIPT_FINISH_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
 }
 
 economist_set_run_step() {
@@ -155,46 +199,56 @@ economist_cleanup_pipeline_artifacts() {
 economist_print_summary() {
     (( ECONOMIST_SUMMARY_PRINTED )) && return 0
     ECONOMIST_SUMMARY_PRINTED=1
-    ECONOMIST_SCRIPT_FINISH_TIME="${ECONOMIST_SCRIPT_FINISH_TIME:-$(date '+%Y-%m-%d %H:%M:%S')}"
 
-    local script_name
-    script_name="$(basename "${BASH_SOURCE[1]}")"
+    local runtime runtime_text result
+
+    if [[ -z "${ECONOMIST_SCRIPT_FINISH_TIME}" ]]; then
+        economist_mark_finish_time
+    elif (( ECONOMIST_SCRIPT_FINISH_EPOCH == 0 )); then
+        ECONOMIST_SCRIPT_FINISH_EPOCH="$(date +%s)"
+    fi
+
+    runtime=$((ECONOMIST_SCRIPT_FINISH_EPOCH - ECONOMIST_SCRIPT_START_EPOCH))
+    runtime_text="$(economist_format_runtime "${runtime}")"
+    result="$(economist_summary_result)"
 
     echo
     echo "========= SUMMARY ========="
-    echo "Script:                ${script_name}"
-    echo "Script start time:     ${ECONOMIST_SCRIPT_START_TIME}"
-    echo "Script finish time:    ${ECONOMIST_SCRIPT_FINISH_TIME}"
-    echo "Stopped by user:       ${ECONOMIST_STOPPED_BY_USER}"
-    echo "Exit code:             ${ECONOMIST_RUN_EXIT_CODE}"
+    economist_summary_line "Script:" "${ECONOMIST_SCRIPT_NAME:-unknown}"
+    economist_summary_line "Script start time:" "${ECONOMIST_SCRIPT_START_TIME}"
+    economist_summary_line "Script finish time:" "${ECONOMIST_SCRIPT_FINISH_TIME}"
+    economist_summary_line "Runtime:" "${runtime_text} (${runtime}s)"
+    economist_summary_line "Result:" "${result}"
+    economist_summary_line "Stopped by user:" "${ECONOMIST_STOPPED_BY_USER}"
+    economist_summary_line "Exit code:" "${ECONOMIST_RUN_EXIT_CODE}"
 
     if [[ "${ECONOMIST_RUN_MODE}" == pipeline ]]; then
-        echo "Mode:                  full pipeline"
-        echo "Edition URL:           ${ECONOMIST_PIPELINE_EDITION_URL:-}"
-        echo "Edition directory:     ${ECONOMIST_PIPELINE_EDITION_DIR:-}"
-        echo "Work directory:        ${ECONOMIST_PIPELINE_WORK_DIR:-}"
-        echo "Output directory:      ${ECONOMIST_PIPELINE_OUTPUT_DIR:-}"
-        echo "Pipeline step reached: ${ECONOMIST_RUN_STEP}"
-        echo "Download exit code:    ${ECONOMIST_PIPELINE_RC_DOWNLOAD:-}"
-        echo "Process exit code:     ${ECONOMIST_PIPELINE_RC_PROCESS:-}"
-        echo "Speedup exit code:     ${ECONOMIST_PIPELINE_RC_SPEEDUP:-}"
-        echo "Move exit code:        ${ECONOMIST_PIPELINE_RC_MOVE:-}"
+        economist_summary_line "Mode:" "full pipeline"
+        economist_summary_line "Edition URL:" "${ECONOMIST_PIPELINE_EDITION_URL:-}"
+        economist_summary_line "Edition directory:" "${ECONOMIST_PIPELINE_EDITION_DIR:-}"
+        economist_summary_line "Work directory:" "${ECONOMIST_PIPELINE_WORK_DIR:-}"
+        economist_summary_line "Output directory:" "${ECONOMIST_PIPELINE_OUTPUT_DIR:-}"
+        economist_summary_line "Pipeline step reached:" "${ECONOMIST_RUN_STEP}"
+        economist_summary_line "Download exit code:" "${ECONOMIST_PIPELINE_RC_DOWNLOAD:-}"
+        economist_summary_line "Process exit code:" "${ECONOMIST_PIPELINE_RC_PROCESS:-}"
+        economist_summary_line "Speedup exit code:" "${ECONOMIST_PIPELINE_RC_SPEEDUP:-}"
+        economist_summary_line "Move exit code:" "${ECONOMIST_PIPELINE_RC_MOVE:-}"
         if (( ECONOMIST_CLEANUP_DONE )); then
-            echo "Cleanup performed:     yes"
+            economist_summary_line "Cleanup performed:" "yes"
         else
-            echo "Cleanup performed:     no"
+            economist_summary_line "Cleanup performed:" "no"
         fi
     else
-        echo "Mode:                  pipeline step"
-        echo "Step:                  ${ECONOMIST_RUN_STEP}"
-        echo "Work directory:        ${ECONOMIST_WORK_DIR:-}"
+        economist_summary_line "Mode:" "pipeline step"
+        economist_summary_line "Step:" "${ECONOMIST_RUN_STEP}"
+        economist_summary_line "Work directory:" "${ECONOMIST_WORK_DIR:-}"
         if [[ -n "${ECONOMIST_OUTPUT_DIR:-}" ]]; then
-            echo "Output directory:      ${ECONOMIST_OUTPUT_DIR}"
+            economist_summary_line "Output directory:" "${ECONOMIST_OUTPUT_DIR}"
         fi
         if (( ECONOMIST_CLEANUP_DONE )); then
-            echo "Cleanup performed:     yes"
+            economist_summary_line "Cleanup performed:" "yes"
         else
-            echo "Cleanup performed:     no"
+            economist_summary_line "Cleanup performed:" "no"
         fi
     fi
 
@@ -232,6 +286,7 @@ economist_on_interrupt() {
         hc_ping "/fail" "Interrupted by user (Ctrl-C)." || true
     fi
 
+    economist_mark_finish_time
     economist_print_summary || true
     exit 130
 }
@@ -257,7 +312,7 @@ economist_finish_run() {
     fi
 
     ECONOMIST_RUN_EXIT_CODE="${exit_code}"
-    ECONOMIST_SCRIPT_FINISH_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+    economist_mark_finish_time
     economist_print_summary || true
     exit "${exit_code}"
 }

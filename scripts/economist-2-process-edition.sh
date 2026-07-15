@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.15 - v. 2.7 - archive unprocessed chapter MP3s before speedup step
 # 2026.07.15 - v. 2.6 - rename chapter start/end vars; strip CR; harden set -u parsing
 # 2026.07.15 - v. 2.5 - ignore global ffmetadata title; fix unbound start/end under set -u
 # 2026.07.15 - v. 2.4 - source github-bin _script_header.sh directly (drop wrapper)
@@ -189,6 +190,19 @@ rm -v [0-9][0-9][0-9]_Books_and_arts.mp3 \
 
 rar m -htb -df -m0 _org_file.rar TheEconomist_${formatted_date}.mp3  chapters.txt
 rar a -htb     -m0 _org_file.rar artwork_*jpg
+
+echo "Archiving original chapter MP3 files (no speechnorm, no speedup)..."
+shopt -s nullglob
+chapter_mp3s=( *.mp3 )
+shopt -u nullglob
+
+if (( ${#chapter_mp3s[@]} > 0 )); then
+    rar a -htb -m3 _org_mp3_files_NO_speechnorm_NO_speedup.rar "${chapter_mp3s[@]}"
+    economist_chown_if_set _org_mp3_files_NO_speechnorm_NO_speedup.rar
+    echo "Created _org_mp3_files_NO_speechnorm_NO_speedup.rar (${#chapter_mp3s[@]} file(s))"
+else
+    echo "No chapter MP3 files to archive."
+fi
 
 economist_chown_if_set _org_file.rar
 

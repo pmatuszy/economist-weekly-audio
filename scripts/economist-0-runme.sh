@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.12 - pipeline exit records finish time before summary
 # 2026.07.15 - v. 1.11 - align debug label values in a fixed column
 # 2026.07.15 - v. 1.10 - clearer English debug labels
 # 2026.07.15 - v. 1.9 - dot _script_header.sh at script top level (fixes banner)
@@ -134,6 +135,7 @@ economist_exit_pipeline() {
     local exit_code="$1"
 
     ECONOMIST_RUN_EXIT_CODE="${exit_code}"
+    economist_mark_finish_time
     economist_print_summary || true
     exit "${exit_code}"
 }
