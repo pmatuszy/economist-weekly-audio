@@ -1,6 +1,10 @@
 # Economist weekly audio — example crontab entries
 # Install with install.sh, edit conf/economist.local.conf, then: crontab -e
 # Paste the variable block and jobs below (adjust paths to your server).
+#
+# Requires util-linux (flock) for overlap-safe cron. install.sh checks for flock
+# and offers to install it when run as root. Without flock, use the no-flock jobs
+# at the bottom of this file instead.
 
 # --- paths (match install.sh / economist.local.conf) ---
 PROFILE_LOCATION_DIR=/root
@@ -10,6 +14,9 @@ ECONOMIST_LOCK=/root/var/lock/economist-runme.lock
 ECONOMIST_LOG=/root/var/log/economist-runme.log
 ECONOMIST_OUTPUT=/worek/economist/theEconomist/_obrobione
 ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
+
+# --- with flock (preferred) ---
+# Use a separate lock file — not the script path.
 
 # Thursday evening — edition usually available
 30 21-23 * * 4 /usr/bin/flock -n ${ECONOMIST_LOCK} ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
@@ -23,6 +30,13 @@ ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
 
 # Remove empty edition folders in output dir (Wednesday)
 0 4 * * 3 /usr/bin/find ${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
+
+# --- without flock (if util-linux is not installed) ---
+# Overlapping cron runs are possible — use only when flock is unavailable.
+#
+# 30 21-23 * * 4 ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
+# 15 0-4  * * 0-3,5,6 ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
+# 15 7-22 * * 0-3,5,6 ${ECONOMIST_RUN} >>${ECONOMIST_LOG} 2>&1
 
 # Obsolete — remove if still present:
 # /root/scripts/0-economist-runme.sh  →  ${ECONOMIST_RUN}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
 # v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
 # v. 1.14 - 2026.07.15 - create starter config from example when none exists
 # v. 1.13 - 2026.07.15 - install script copies into bin/, not repo exec wrappers
@@ -23,6 +24,7 @@ set -euo pipefail
 BASE_DIR="${profile_location_dir:-$HOME}"
 PROMPT_TIMEOUT=300
 CONFIG_REPLACE_TIMEOUT=20
+SECTION_RULE='======================================================================'
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -137,7 +139,16 @@ print_aligned_config_path() {
     printf "%${CONFIG_PATH_TEXT_COL}s%s\n" "" "${base}"
 }
 
+print_section() {
+    echo
+    echo "${SECTION_RULE}"
+    echo "$1"
+    echo "${SECTION_RULE}"
+    echo
+}
+
 print_config_replace_offer() {
+    print_section "Config replace offer"
     echo "An economist.local.conf file is already installed in conf/."
     echo "The installer can overwrite it with the copy from your private repo"
     echo "(RSS URL, healthcheck, and paths). Waits ${CONFIG_REPLACE_TIMEOUT}s; default is no."
@@ -191,6 +202,85 @@ read_yes_no_quit() {
     esac
 }
 
+flock_path() {
+    command -v flock 2>/dev/null || true
+}
+
+install_flock_package() {
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Installing util-linux (flock) via apt-get..."
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux
+        return $?
+    fi
+    if command -v dnf >/dev/null 2>&1; then
+        echo "Installing util-linux (flock) via dnf..."
+        dnf install -y util-linux
+        return $?
+    fi
+    if command -v yum >/dev/null 2>&1; then
+        echo "Installing util-linux (flock) via yum..."
+        yum install -y util-linux
+        return $?
+    fi
+    if command -v apk >/dev/null 2>&1; then
+        echo "Installing util-linux (flock) via apk..."
+        apk add --no-cache util-linux
+        return $?
+    fi
+    echo "No supported package manager found. Install util-linux manually." >&2
+    return 1
+}
+
+resolve_flock_for_cron() {
+    local flock_bin
+
+    flock_bin="$(flock_path)"
+    if [[ -n "${flock_bin}" ]]; then
+        FLOCK_BIN="${flock_bin}"
+        USE_FLOCK_IN_CRON=1
+        return 0
+    fi
+
+    FLOCK_BIN=""
+    USE_FLOCK_IN_CRON=0
+
+    if (( ASSUME_YES )); then
+        echo "flock is not installed — crontab hint will omit flock (--yes)."
+        return 0
+    fi
+
+    echo "flock is not installed (usually from the util-linux package)."
+
+    if [[ "$(id -u)" -eq 0 ]]; then
+        read_yes_no_quit "Install util-linux now to enable flock in cron? [y/N/q]: " "${PROMPT_TIMEOUT}" 0
+        case "${REPLY}" in
+            y)
+                if install_flock_package; then
+                    flock_bin="$(flock_path)"
+                    if [[ -n "${flock_bin}" ]]; then
+                        FLOCK_BIN="${flock_bin}"
+                        USE_FLOCK_IN_CRON=1
+                        echo "flock installed: ${FLOCK_BIN}"
+                        return 0
+                    fi
+                fi
+                echo "flock still not available — crontab hint will omit flock." >&2
+                ;;
+            q)
+                echo "Quit."
+                exit 0
+                ;;
+            *)
+                echo "Crontab hint will omit flock (overlapping cron runs are possible)."
+                ;;
+        esac
+    else
+        echo "Not running as root — cannot install flock."
+        echo "Crontab hint will omit flock (overlapping cron runs are possible)."
+    fi
+}
+
 find_legacy_wrappers() {
     local -n _out="$1"
     local name path
@@ -212,7 +302,7 @@ remove_legacy_wrappers() {
         return 0
     fi
 
-    echo
+    print_section "Legacy script cleanup"
     echo "Legacy script names (old naming):"
     for path in "${legacy_paths[@]}"; do
         echo "  ${path}"
@@ -320,7 +410,6 @@ install_config_file() {
         check_config_permissions "${CONF_FILE}"
 
         if [[ -f "${PRIVATE_CONF}" ]]; then
-            echo
             print_config_replace_offer
             read_yes_no_quit "Replace installed config with private repo copy? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
             case "${REPLY}" in
@@ -378,6 +467,7 @@ install_config_file() {
 install_bin_scripts() {
     local script_path name target
 
+    print_section "Installing scripts"
     mkdir -p "${BIN_DIR}"
 
     for script_path in "${SCRIPT_PATHS[@]}"; do
@@ -399,6 +489,7 @@ print_crontab_hint() {
     local log_file="${BASE_DIR}/var/log/economist-runme.log"
     local base_dir="/worek/economist/theEconomist"
     local output_dir archive_dir
+    local cron_run flock_note flock_vars
 
     output_dir="${base_dir}/_obrobione"
     archive_dir="${base_dir}/archive"
@@ -413,26 +504,38 @@ print_crontab_hint() {
 
     mkdir -p "${BASE_DIR}/var/lock" "${BASE_DIR}/var/log" 2>/dev/null || true
 
-    cat <<EOF
+    print_section "Crontab hint — add with: crontab -e"
 
---- Crontab hint (add with: crontab -e) ---
+    resolve_flock_for_cron
+
+    if (( USE_FLOCK_IN_CRON )); then
+        cron_run="${FLOCK_BIN} -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN}"
+        flock_vars="ECONOMIST_LOCK=${lock_file}"
+        flock_note="# Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path."
+    else
+        cron_run="\${ECONOMIST_RUN}"
+        flock_vars="# ECONOMIST_LOCK=  (flock not installed — cron runs without overlap lock)"
+        flock_note="# flock not installed — install util-linux for overlap protection."
+    fi
+
+    cat <<EOF
 # Economist weekly audio — paths for this install
 # Full example: ${REPO_ROOT}/crontab.example
 
 PROFILE_LOCATION_DIR=${BASE_DIR}
 ECONOMIST_BIN=${BIN_DIR}
 ECONOMIST_RUN=${run_script}
-ECONOMIST_LOCK=${lock_file}
+${flock_vars}
 ECONOMIST_LOG=${log_file}
 ECONOMIST_OUTPUT=${output_dir}
 ECONOMIST_ARCHIVE=${archive_dir}
 
 # Thursday evening (edition usually available)
-30 21-23 * * 4 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
+30 21-23 * * 4 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
 
 # Retry early morning and daytime (Mon–Wed, Fri–Sun)
-15 0-4  * * 0-3,5,6 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
-15 7-22 * * 0-3,5,6 /usr/bin/flock -n \${ECONOMIST_LOCK} \${ECONOMIST_RUN} >>\${ECONOMIST_LOG} 2>&1
+15 0-4  * * 0-3,5,6 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
+15 7-22 * * 0-3,5,6 ${cron_run} >>\${ECONOMIST_LOG} 2>&1
 
 # Move processed editions to archive (Thursday night)
 0 2 * * 4 /bin/mv -f \${ECONOMIST_OUTPUT}/[0-9]* \${ECONOMIST_ARCHIVE}/ 2>/dev/null
@@ -440,23 +543,23 @@ ECONOMIST_ARCHIVE=${archive_dir}
 # Remove empty output subdirs (Wednesday)
 0 4 * * 3 /usr/bin/find \${ECONOMIST_OUTPUT} -mindepth 1 -maxdepth 1 -type d -empty -delete
 
-Replace obsolete cron lines (e.g. /root/scripts/0-economist-runme.sh).
-Use a separate lock file (\${ECONOMIST_LOCK}) — not the script path.
----
+${flock_note}
+# Replace obsolete cron lines (e.g. /root/scripts/0-economist-runme.sh).
 EOF
+    echo "${SECTION_RULE}"
+    echo
 }
 
-echo "Economist weekly audio — install"
-echo
+print_section "Economist weekly audio — install"
 echo "Base directory:   ${BASE_DIR}"
 echo "Repository:       ${REPO_ROOT}"
 echo "Bin directory:    ${BIN_DIR}"
 echo "Config directory: ${CONF_DIR}"
 echo
-echo "Config plan:"
+print_section "Config plan"
 describe_config_plan
-echo
-echo "Scripts to install into ${BIN_DIR}:"
+print_section "Scripts to install"
+echo "Target directory: ${BIN_DIR}"
 for script_path in "${SCRIPT_PATHS[@]}"; do
     echo "  $(basename "${script_path}")"
 done
@@ -502,8 +605,9 @@ install_bin_scripts
 
 remove_legacy_wrappers
 
-echo
-echo "Done. Run the pipeline with:"
+print_section "Install complete"
+echo "Run the pipeline with:"
 echo "  ${BIN_DIR}/economist-0-runme.sh"
+echo
 
 print_crontab_hint
