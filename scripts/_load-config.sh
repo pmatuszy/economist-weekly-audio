@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.15 - v. 2.8 - RSS list/verify helpers; interactive --show-available picker
 # 2026.07.15 - v. 2.7 - pipeline step exit codes: N/A when stage not reached
 # 2026.07.15 - v. 2.6 - summary: edition dir file count; cron archive from/to paths
 # 2026.07.15 - v. 2.5 - cleanup_empty_dirs step label in summary
@@ -125,6 +126,211 @@ require_economist_rss_url() {
         echo "ECONOMIST_RSS_URL is not set in economist.local.conf" >&2
         exit 1
     fi
+}
+
+economist_latest_saturday_iso() {
+    local dow_now off_now
+
+    dow_now=$(date +%u)
+    off_now=$(( (dow_now + 1) % 7 ))
+    date -d "today - ${off_now} days" +%F
+}
+
+economist_edition_date_for_rss_position() {
+    local pos="${1:-1}" latest_sat
+
+    [[ "${pos}" =~ ^[0-9]+$ ]] || return 1
+    (( pos >= 1 )) || return 1
+
+    latest_sat="$(economist_latest_saturday_iso)"
+    date -d "${latest_sat} - $((pos - 1)) weeks" +%F
+}
+
+economist_edition_output_dir_for_date() {
+    local iso="$1" y m d
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    IFS='-' read -r y m d <<< "${iso}"
+    echo "${ECONOMIST_OUTPUT_DIR}/${y}.${m}.${d}_TheEconomist"
+}
+
+economist_rss_fetch_to() {
+    local dest="$1"
+
+    curl -fsSL "${ECONOMIST_RSS_URL}" -o "${dest}"
+}
+
+economist_rss_item_count() {
+    local rss_file="$1" item_count=0 item_count_raw
+
+    if command -v xmllint >/dev/null 2>&1; then
+        item_count_raw="$(xmllint --xpath 'count(//item)' "${rss_file}" 2>/dev/null || echo 0)"
+        item_count="${item_count_raw%.*}"
+    fi
+
+    if [[ "${item_count}" -eq 0 ]]; then
+        item_count="$(grep -oP '<enclosure url="\K[^"]+' "${rss_file}" | wc -l | tr -d '[:space:]')"
+    fi
+
+    echo "${item_count:-0}"
+}
+
+economist_rss_enclosure_url_at() {
+    local rss_file="$1" pos="$2" url="" item_count
+
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    if [[ "${pos}" -le 0 || "${pos}" -gt "${item_count}" ]]; then
+        return 1
+    fi
+
+    if command -v xmllint >/dev/null 2>&1 && [[ "${item_count}" -gt 0 ]]; then
+        url="$(xmllint --xpath "string((//item)[${pos}]/enclosure/@url)" "${rss_file}" 2>/dev/null || true)"
+    fi
+
+    if [[ -z "${url}" ]]; then
+        url="$(grep -oP '<enclosure url="\K[^"]+' "${rss_file}" | sed -n "${pos}p" || true)"
+    fi
+
+    [[ -n "${url}" ]] || return 1
+    echo "${url}"
+}
+
+economist_rss_item_title_at() {
+    local rss_file="$1" pos="$2" title=""
+
+    if command -v xmllint >/dev/null 2>&1; then
+        title="$(xmllint --xpath "string((//item)[${pos}]/title)" "${rss_file}" 2>/dev/null || true)"
+    fi
+
+    if [[ -z "${title}" ]]; then
+        title="$(grep -oP '<title>\K[^<]+' "${rss_file}" | sed -n "$((pos + 1))p" || true)"
+    fi
+
+    title="${title//$'\n'/ }"
+    title="${title//$'\r'/}"
+    echo "${title:-—}"
+}
+
+economist_verify_enclosure_on_server() {
+    local url="$1" code=""
+
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "curl is required to verify MP3 URLs on the server." >&2
+        return 1
+    fi
+
+    code="$(curl -fsSIL -o /dev/null -w '%{http_code}' --max-time 25 --retry 1 "${url}" 2>/dev/null || echo 000)"
+    if [[ "${code}" == "200" || "${code}" == "206" ]]; then
+        return 0
+    fi
+
+    code="$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 25 --range 0-511 --retry 1 "${url}" 2>/dev/null || echo 000)"
+    [[ "${code}" == "200" || "${code}" == "206" ]]
+}
+
+economist_local_edition_status() {
+    local edition_dir="$1"
+
+    if [[ -d "${edition_dir}" ]] && [[ -n "$(ls -A "${edition_dir}" 2>/dev/null)" ]]; then
+        echo "already processed"
+    elif [[ -d "${edition_dir}" ]]; then
+        echo "output dir empty"
+    else
+        echo "not downloaded"
+    fi
+}
+
+economist_show_and_pick_available_editions() {
+    local -n _picked_iso_ref="$1"
+    local rss_file="" item_count=0 pos=0 edition_iso="" title="" url="" local_status=""
+    local edition_dir="" choice="" idx=0
+    local -a pick_positions=()
+    local -a pick_isos=()
+    local -a pick_titles=()
+    local -a pick_local=()
+
+    _picked_iso_ref=""
+
+    rss_file="$(mktemp)"
+    trap 'rm -f "${rss_file}"' RETURN
+
+    echo "Fetching RSS and checking MP3 URLs on the server..."
+    if ! economist_rss_fetch_to "${rss_file}"; then
+        echo "Failed to fetch RSS: ${ECONOMIST_RSS_URL}" >&2
+        return 1
+    fi
+
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    if [[ "${item_count}" -eq 0 ]]; then
+        echo "No items found in RSS feed." >&2
+        return 1
+    fi
+
+    for (( pos = 1; pos <= item_count; ++pos )); do
+        url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+        [[ -n "${url}" ]] || continue
+        if ! economist_verify_enclosure_on_server "${url}"; then
+            continue
+        fi
+
+        edition_iso="$(economist_edition_date_for_rss_position "${pos}")" || continue
+        title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+        edition_dir="$(economist_edition_output_dir_for_date "${edition_iso}")"
+        local_status="$(economist_local_edition_status "${edition_dir}")"
+
+        pick_positions+=("${pos}")
+        pick_isos+=("${edition_iso}")
+        pick_titles+=("${title}")
+        pick_local+=("${local_status}")
+    done
+
+    if [[ ${#pick_positions[@]} -eq 0 ]]; then
+        echo "No editions verified as downloadable on the server." >&2
+        return 1
+    fi
+
+    echo
+    echo "Verified editions (RSS item → Saturday edition date):"
+    printf '  %-3s %-12s %-40s %s\n' "#" "Edition" "Title" "Local"
+    printf '  %-3s %-12s %-40s %s\n' "---" "--------" "-----" "-----"
+    for (( idx = 0; idx < ${#pick_positions[@]}; ++idx )); do
+        printf '  %-3s %-12s %-40s %s\n' \
+            "$((idx + 1))" \
+            "${pick_isos[idx]}" \
+            "${pick_titles[idx]:0:40}" \
+            "${pick_local[idx]}"
+    done
+    echo
+
+    if [[ ! -t 0 && ! -r /dev/tty ]]; then
+        echo "Non-interactive session — listing only (no pick)."
+        return 0
+    fi
+
+    while true; do
+        if [[ -r /dev/tty ]]; then
+            read -r -p "Pick edition number to download [1-${#pick_positions[@]}], or q to quit: " choice </dev/tty
+        else
+            read -r -p "Pick edition number to download [1-${#pick_positions[@]}], or q to quit: " choice
+        fi
+
+        case "${choice}" in
+            q|Q)
+                return 0
+                ;;
+            ''|*[!0-9]*)
+                echo "Enter a number from 1 to ${#pick_positions[@]}, or q."
+                ;;
+            *)
+                if (( choice >= 1 && choice <= ${#pick_positions[@]} )); then
+                    _picked_iso_ref="${pick_isos[choice - 1]}"
+                    echo "Selected edition: ${_picked_iso_ref}"
+                    return 0
+                fi
+                echo "Enter a number from 1 to ${#pick_positions[@]}, or q."
+                ;;
+        esac
+    done
 }
 
 hc_ping() {

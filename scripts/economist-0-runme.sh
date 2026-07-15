@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.15 - v. 1.13 - --show-available lists verified RSS editions and interactive pick
 # 2026.07.15 - v. 1.12 - pipeline exit records finish time before summary
 # 2026.07.15 - v. 1.11 - align debug label values in a fixed column
 # 2026.07.15 - v. 1.10 - clearer English debug labels
@@ -30,20 +31,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HEADER_EXTRA_ARGS=()
 edition_date_args=()
+SHOW_AVAILABLE=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no_startup_delay|NO_STARTUP_DELAY)
             HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
             shift
             ;;
+        --show-available|--list-available)
+            SHOW_AVAILABLE=1
+            HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
+            shift
+            ;;
         -h|--help)
             cat <<EOF
-Usage: $(basename "$0") [--no_startup_delay] [YYYY-MM-DD]
+Usage: $(basename "$0") [--no_startup_delay] [--show-available] [YYYY-MM-DD]
 
 Run the full Economist weekly audio pipeline.
 
 Options:
   --no_startup_delay   Skip random startup delay (recommended for cron).
+  --show-available     List RSS editions verified on the server; pick one to download.
+  --list-available     Alias for --show-available.
   YYYY-MM-DD             Process a specific edition date instead of the latest.
 
 Requires github-bin _script_header.sh in \${profile_location_dir:-\$HOME}/bin/.
@@ -56,7 +65,7 @@ EOF
                 shift
             else
                 echo "Unknown argument or invalid date: $1" >&2
-                echo "Expected YYYY-MM-DD (e.g., 2025-09-13) or --no_startup_delay" >&2
+                echo "Expected YYYY-MM-DD (e.g., 2025-09-13), --show-available, or --no_startup_delay" >&2
                 exit 1
             fi
             ;;
@@ -90,6 +99,22 @@ unset _economist_header_file
 DEBUG=1
 
 load_economist_config
+require_economist_rss_url
+
+if (( SHOW_AVAILABLE )); then
+    if [[ ${#edition_date_args[@]} -eq 1 ]]; then
+        echo "Cannot use --show-available together with an edition date." >&2
+        exit 1
+    fi
+    picked_edition=""
+    if ! economist_show_and_pick_available_editions picked_edition; then
+        exit 1
+    fi
+    if [[ -z "${picked_edition}" ]]; then
+        exit 0
+    fi
+    edition_date_args=("${picked_edition}")
+fi
 
 economist_run_control_init pipeline
 economist_install_run_traps
