@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 1.7 - 2026.07.15 - wrappers economist-*.sh; prompt to remove legacy numbered names
 # v. 1.6 - 2026.07.15 - prompts default no [y/N/q]; --yes still auto-yes
 # v. 1.5 - 2026.07.15 - prompts default yes [Y/n/q]; --yes auto-fixes chmod 600
 # v. 1.4 - 2026.07.15 - prompts: single key [y/N/q], 300s timeout, default N
@@ -6,7 +7,7 @@
 # v. 1.2 - 2026.07.15 - check private config file permissions are 600
 # v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
 # v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
-# Interactive install: wrappers into bin/, config into conf/ (sibling directories).
+# Interactive install: economist-*.sh wrappers into bin/, config into conf/.
 # Single-key prompts [y/N/q] with 300s timeout; default is no.
 
 set -euo pipefail
@@ -21,6 +22,14 @@ BIN_DIR="${BASE_DIR}/bin"
 DO_PULL=0
 ASSUME_YES=0
 
+LEGACY_WRAPPER_NAMES=(
+    "0-economist-runme.sh"
+    "1-economist-download.sh"
+    "2-economist-process-edition.sh"
+    "3-economist-speedup-loudness.sh"
+    "4-economist-move-results.sh"
+)
+
 usage() {
     cat <<EOF
 Usage: install.sh [options]
@@ -32,7 +41,7 @@ Expected layout:
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}/                 # this repo
   \${profile_location_dir:-\$HOME}/github/${REPO_NAME}-private/         # optional secrets source
   \${profile_location_dir:-\$HOME}/conf/economist.local.conf             # installed config (mode 600)
-  \${profile_location_dir:-\$HOME}/bin/0-economist-runme.sh             # installed wrappers
+  \${profile_location_dir:-\$HOME}/bin/economist-runme.sh             # installed wrappers
 
 Options:
   --bin-dir PATH   Target bin directory (default: \${profile_location_dir:-\$HOME}/bin)
@@ -93,7 +102,7 @@ if (( DO_PULL )); then
     fi
 fi
 
-mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f -name '*.sh' ! -name '_*.sh' | sort)
+mapfile -t SCRIPT_PATHS < <(find "${SCRIPTS_DIR}" -maxdepth 1 -type f -name 'economist-*.sh' | sort)
 
 if [[ ${#SCRIPT_PATHS[@]} -eq 0 ]]; then
     echo "No installable scripts found in ${SCRIPTS_DIR}" >&2
@@ -118,6 +127,49 @@ read_yes_no_quit() {
         y|Y) REPLY=y ;;
         q|Q) REPLY=q ;;
         *)   REPLY=n ;;
+    esac
+}
+
+find_legacy_wrappers() {
+    local -n _out="$1"
+    local name path
+
+    _out=()
+    for name in "${LEGACY_WRAPPER_NAMES[@]}"; do
+        path="${BIN_DIR}/${name}"
+        if [[ -f "${path}" ]]; then
+            _out+=("${path}")
+        fi
+    done
+}
+
+remove_legacy_wrappers() {
+    local -a legacy_paths=()
+
+    find_legacy_wrappers legacy_paths
+    if [[ ${#legacy_paths[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    echo
+    echo "Legacy wrappers (old numbered names):"
+    for path in "${legacy_paths[@]}"; do
+        echo "  ${path}"
+    done
+
+    read_yes_no_quit "Remove these legacy wrappers? [y/N/q]: "
+    case "${REPLY}" in
+        y)
+            rm -f "${legacy_paths[@]}"
+            echo "Removed ${#legacy_paths[@]} legacy wrapper(s)."
+            ;;
+        q)
+            echo "Quit."
+            exit 0
+            ;;
+        *)
+            echo "Kept legacy wrappers."
+            ;;
     esac
 }
 
@@ -225,6 +277,16 @@ echo "Wrappers to install:"
 for script_path in "${SCRIPT_PATHS[@]}"; do
     echo "  ${BIN_DIR}/$(basename "${script_path}") -> ${script_path}"
 done
+
+legacy_preview=()
+find_legacy_wrappers legacy_preview
+if [[ ${#legacy_preview[@]} -gt 0 ]]; then
+    echo
+    echo "Legacy wrappers present (will offer removal after install):"
+    for path in "${legacy_preview[@]}"; do
+        echo "  ${path}"
+    done
+fi
 echo
 
 case ":${PATH}:" in
@@ -266,6 +328,8 @@ EOF
     echo "Installed ${target}"
 done
 
+remove_legacy_wrappers
+
 echo
 echo "Done. Run the pipeline with:"
-echo "  ${BIN_DIR}/0-economist-runme.sh"
+echo "  ${BIN_DIR}/economist-runme.sh"

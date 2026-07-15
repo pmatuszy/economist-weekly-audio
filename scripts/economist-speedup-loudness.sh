@@ -1,6 +1,6 @@
 #!/bin/bash
+# v. 2.8 - 2026.07.15 - renamed from 3-economist-speedup-loudness.sh
 # v. 2.7 - 2026.07.15 - added script description header
-# v. 2.6 - 2026.07.15 - renamed output_ext to output_file_ext
 # v. 2.5 - 2026.07.15 - Polish local variable names translated to English
 # v. 2.4 - 2026.06.19 - runtime messages translated to English
 # v. 2.3 - 2026.06.19 - changelog comments translated to English

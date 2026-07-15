@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# v. 1.2 - 2026.07.15 - added script description header
-# v. 1.1 - 2026.07.15 - Polish local variable names translated to English
+# v. 1.2 - 2026.07.15 - renamed from 0-economist-runme.sh
+# v. 1.1 - 2026.07.15 - added script description header
 # v. 1.0 - 2026.06.19 - runtime messages translated to English
 # v. 0.9 - 2026.06.19 - changelog comments translated to English
 # v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
@@ -101,14 +101,14 @@ cd "${edition_directory}"
 
 log "working directory: $(pwd)"
 
-log_part1=$(echo ; "${SCRIPT_DIR}/1-economist-download.sh" "${args[@]}" ; exit $?)
+log_part1=$(echo ; "${SCRIPT_DIR}/economist-download.sh" "${args[@]}" ; exit $?)
 exit_code=$?
 
-log "output from ${SCRIPT_DIR}/1-economist-download.sh:"
+log "output from ${SCRIPT_DIR}/economist-download.sh:"
 log "$log_part1"
 log ""
 
-log "exit code from ${SCRIPT_DIR}/1-economist-download.sh = $exit_code"
+log "exit code from ${SCRIPT_DIR}/economist-download.sh = $exit_code"
 
 if [[ $exit_code -eq 2 ]]; then
   hc_ping "" "${log_part1}"
@@ -117,10 +117,10 @@ if [[ $exit_code -eq 2 ]]; then
   exit $exit_code
 fi
 
-log_part2=$(echo ; "${SCRIPT_DIR}/2-economist-process-edition.sh" "${args[@]}" ; exit $?)
+log_part2=$(echo ; "${SCRIPT_DIR}/economist-process-edition.sh" "${args[@]}" ; exit $?)
 exit_code=$?
 
-log "output from ${SCRIPT_DIR}/2-economist-process-edition.sh:"
+log "output from ${SCRIPT_DIR}/economist-process-edition.sh:"
 log "$log_part2"
 log ""
 
@@ -131,7 +131,7 @@ if [[ $exit_code -ne 0 ]]; then
   exit $exit_code
 fi
 
-log_part3=$(echo ; "${SCRIPT_DIR}/3-economist-speedup-loudness.sh" ; exit $?)
+log_part3=$(echo ; "${SCRIPT_DIR}/economist-speedup-loudness.sh" ; exit $?)
 exit_code=$?
 
 if [[ $exit_code -ne 0 ]]; then
@@ -141,7 +141,7 @@ if [[ $exit_code -ne 0 ]]; then
   exit $exit_code
 fi
 
-log_part4=$(echo ; "${SCRIPT_DIR}/4-economist-move-results.sh" ; exit $?)
+log_part4=$(echo ; "${SCRIPT_DIR}/economist-move-results.sh" ; exit $?)
 exit_code=$?
 
 if [[ $exit_code -ne 0 ]]; then

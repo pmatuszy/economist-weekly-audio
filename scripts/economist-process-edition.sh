@@ -1,6 +1,6 @@
 #!/bin/bash
+# v. 1.9 - 2026.07.15 - renamed from 2-economist-process-edition.sh
 # v. 1.8 - 2026.07.15 - added script description header
-# v. 1.7 - 2026.07.15 - Polish local variable names translated to English
 # v. 1.6 - 2026.06.19 - runtime messages translated to English
 # v. 1.5 - 2026.06.19 - changelog comments translated to English
 # v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
