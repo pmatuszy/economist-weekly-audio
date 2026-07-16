@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.17 - quit when no new RSS edition; proceed prompt only if new
 # 2026.07.16 - v. 1.16 - RSS verify + proceed prompt before download (10s, Y default)
 # 2026.07.16 - v. 1.15 - print summary when user quits show-available without picking
 # 2026.07.16 - v. 1.14 - show-available confirm pick; force reprocess when confirmed
@@ -222,8 +223,37 @@ latest_edition="$(
     | head -n1 | sed 's#^#https://www.economist.com#' | sort -u
 )"
 
+archive_edition_url="${latest_edition}"
+explicit_edition_iso=""
 if [[ ${#edition_date_args[@]} -eq 1 ]]; then
-    latest_edition=https://www.economist.com/weeklyedition/"${edition_date_args[0]}"
+    explicit_edition_iso="${edition_date_args[0]}"
+fi
+
+resolved_edition_iso=""
+if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
+    if ! economist_check_new_edition_for_run "${explicit_edition_iso}" "${ECONOMIST_FORCE_REPROCESS:-0}" resolved_edition_iso; then
+        if [[ -n "${archive_edition_url}" ]]; then
+            log_kv "Economist.com archive:" "${archive_edition_url}"
+        fi
+        economist_set_run_step no_new_edition
+        economist_exit_pipeline 0
+    fi
+else
+    resolved_edition_iso="${explicit_edition_iso}"
+    if [[ -z "${resolved_edition_iso}" ]]; then
+        resolved_edition_iso="$(economist_edition_iso_from_weekly_url "${archive_edition_url}" 2>/dev/null || true)"
+    fi
+    if [[ -z "${resolved_edition_iso}" ]]; then
+        echo "Cannot determine edition date." >&2
+        economist_exit_pipeline 1
+    fi
+fi
+
+latest_edition="https://www.economist.com/weeklyedition/${resolved_edition_iso}"
+args=("${resolved_edition_iso}")
+
+if [[ -n "${archive_edition_url}" && "${archive_edition_url}" != "${latest_edition}" ]]; then
+    log_kv "Economist.com archive:" "${archive_edition_url}"
 fi
 
 log_kv "Latest edition URL:" "${latest_edition}"
@@ -259,26 +289,12 @@ cd "${edition_directory}"
 
 log_kv "Current working directory:" "$(pwd)"
 
-edition_iso=""
-issue_available=0
-if edition_iso="$(economist_edition_iso_from_weekly_url "${latest_edition}" 2>/dev/null)"; then
-    if economist_verify_edition_date_on_server "${edition_iso}"; then
-        issue_available=1
-        log_kv "RSS/server check:" "available (issue $(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—"))"
-    else
-        log_kv "RSS/server check:" "not verified yet"
-    fi
-else
-    log_kv "RSS/server check:" "skipped (no edition date)"
-fi
+issue_no="$(economist_issue_number_for_edition_date "${resolved_edition_iso}" 2>/dev/null || echo "—")"
+log_kv "RSS/server check:" "available (issue ${issue_no})"
 
 if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
-    if ! economist_prompt_proceed_before_download "${edition_iso:-unknown}" "${issue_available}"; then
-        if [[ ! -t 0 && ! -r /dev/tty ]] && (( ! issue_available )); then
-            echo "Edition not verified on RSS server — exiting (non-interactive)."
-        else
-            echo "Download cancelled."
-        fi
+    if ! economist_prompt_proceed_before_download "${resolved_edition_iso}"; then
+        echo "Download cancelled."
         economist_set_run_step pipeline_confirm_quit
         economist_cleanup_pipeline_artifacts "${work_dir}" "${edition_directory}" "${output_dir}" "${edition_name}"
         economist_exit_pipeline 0

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.22 - check RSS for new edition before proceed; quit if none
 # 2026.07.16 - v. 2.21 - verify edition on RSS server; proceed prompt before download
 # 2026.07.16 - v. 2.20 - summary on show-available quit; result label for no selection
 # 2026.07.16 - v. 2.19 - confirm prompt reads one character like install.sh
@@ -333,42 +334,84 @@ economist_verify_edition_date_on_server() {
     return 1
 }
 
+economist_find_newest_verified_rss_edition() {
+    local rss_file="" pos=0 item_count=0 url="" edition_at_pos=""
+
+    rss_file="$(mktemp)"
+    trap 'rm -f "${rss_file}"' RETURN
+
+    economist_rss_fetch_to "${rss_file}" || return 1
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    (( item_count > 0 )) || return 1
+
+    for (( pos = 1; pos <= item_count; ++pos )); do
+        url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+        [[ -n "${url}" ]] || continue
+        economist_verify_enclosure_on_server "${url}" || continue
+        edition_at_pos="$(economist_edition_date_for_rss_position "${pos}")" || continue
+        echo "${edition_at_pos}"
+        return 0
+    done
+
+    return 1
+}
+
+economist_check_new_edition_for_run() {
+    local explicit_iso="${1:-}" force_reprocess="${2:-0}"
+    local -n _resolved_iso_ref="$3"
+    local edition_dir="" status="" issue_no=""
+
+    _resolved_iso_ref=""
+
+    if [[ -n "${explicit_iso}" ]]; then
+        _resolved_iso_ref="${explicit_iso}"
+        if ! economist_verify_edition_date_on_server "${explicit_iso}"; then
+            issue_no="$(economist_issue_number_for_edition_date "${explicit_iso}" 2>/dev/null || echo "—")"
+            echo
+            echo "No new edition on the server — ${explicit_iso} (issue ${issue_no}) is not in the RSS feed yet."
+            return 1
+        fi
+    else
+        if ! _resolved_iso_ref="$(economist_find_newest_verified_rss_edition)"; then
+            echo
+            echo "No new Economist edition on the server (nothing verified in the RSS feed)."
+            return 1
+        fi
+    fi
+
+    edition_dir="$(economist_edition_output_dir_for_date "${_resolved_iso_ref}")"
+    status="$(economist_local_edition_status "${edition_dir}")"
+    issue_no="$(economist_issue_number_for_edition_date "${_resolved_iso_ref}" 2>/dev/null || echo "—")"
+
+    if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 ]]; then
+        echo
+        echo "No new edition — ${_resolved_iso_ref} (issue ${issue_no}) is already processed."
+        return 1
+    fi
+
+    return 0
+}
+
 economist_prompt_proceed_before_download() {
-    local iso="$1" issue_available="$2" issue_no="" answer=""
+    local iso="$1" issue_no="" answer=""
 
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
-        (( issue_available )) || return 1
         return 0
     fi
 
     issue_no="$(economist_issue_number_for_edition_date "${iso}" 2>/dev/null || echo "—")"
-
-    if (( issue_available )); then
-        echo
-        echo "New edition verified on the RSS server (issue ${issue_no})."
-        economist_read_tty_char "Proceed with download? [Y/n/q] (10s): " answer 10
-        case "${answer}" in
-            n|N|q|Q)
-                return 1
-                ;;
-            ''|y|Y)
-                return 0
-                ;;
-            *)
-                return 0
-                ;;
-        esac
-    fi
-
     echo
-    echo "Edition ${iso} is not verified on the RSS server yet (issue ${issue_no})."
-    economist_read_tty_char "Proceed anyway? [y/N/q] (10s): " answer 10
+    echo "New edition on the server: ${iso} (issue ${issue_no})."
+    economist_read_tty_char "Proceed with download? [Y/n/q] (10s): " answer 10
     case "${answer}" in
-        y|Y)
+        n|N|q|Q)
+            return 1
+            ;;
+        ''|y|Y)
             return 0
             ;;
         *)
-            return 1
+            return 0
             ;;
     esac
 }
@@ -658,6 +701,7 @@ economist_format_step_name() {
         show_available) echo "show available editions" ;;
         show_available_quit) echo "quit (no edition selected)" ;;
         pipeline_confirm_quit) echo "quit before download" ;;
+        no_new_edition) echo "no new edition on server" ;;
         "") echo "unknown" ;;
         *) echo "${step}" ;;
     esac
@@ -697,6 +741,8 @@ economist_summary_result() {
         echo "quit (no edition selected)"
     elif [[ "${ECONOMIST_RUN_STEP}" == "pipeline_confirm_quit" ]]; then
         echo "quit before download"
+    elif [[ "${ECONOMIST_RUN_STEP}" == "no_new_edition" ]]; then
+        echo "no new edition on server"
     elif (( ECONOMIST_RUN_EXIT_CODE == 0 )); then
         echo "success"
     else
@@ -854,6 +900,8 @@ economist_print_summary() {
             economist_summary_line "Run:" "show-available (no edition selected)"
         elif [[ "${ECONOMIST_RUN_STEP}" == "pipeline_confirm_quit" ]]; then
             economist_summary_line "Run:" "quit before download"
+        elif [[ "${ECONOMIST_RUN_STEP}" == "no_new_edition" ]]; then
+            economist_summary_line "Run:" "no new edition on server"
         else
             economist_summary_line "Run:" "all steps (download → move)"
         fi
