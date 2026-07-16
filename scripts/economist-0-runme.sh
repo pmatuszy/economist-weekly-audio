@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.24 - config summary printed before proceed prompt
+# 2026.07.16 - v. 1.23 - print config loaded OK before script header
+# 2026.07.16 - v. 1.22 - validate config before script header banner
+# 2026.07.16 - v. 1.21 - validate economist.local.conf before pipeline starts
 # 2026.07.16 - v. 1.20 - edition output dirs use YYYYMMDD_TheEconomist (no dots)
 # 2026.07.16 - v. 1.19 - startup cleanup of leftovers from failed previous run
 # 2026.07.16 - v. 1.18 - drop website archive line on download; clarify on quit only
@@ -85,6 +89,10 @@ fi
 
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
+
+load_economist_config
+validate_economist_config
+
 _economist_header_file="$(economist_find_script_header_file)" || true
 if [[ -n "${_economist_header_file}" ]]; then
     if [[ ${#HEADER_EXTRA_ARGS[@]} -eq 0 ]] && ! tty >/dev/null 2>&1; then
@@ -104,9 +112,6 @@ fi
 unset _economist_header_file
 
 DEBUG=1
-
-load_economist_config
-require_economist_rss_url
 
 economist_run_control_init pipeline
 economist_install_run_traps

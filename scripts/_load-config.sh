@@ -1,4 +1,7 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.27 - print config summary immediately before proceed prompt
+# 2026.07.16 - v. 2.26 - ECONOMIST_CONFIG_FILE; print config OK after validation
+# 2026.07.16 - v. 2.25 - validate_economist_config for main pipeline startup
 # 2026.07.16 - v. 2.24 - edition dirs YYYYMMDD_TheEconomist (legacy dotted names still recognized)
 # 2026.07.16 - v. 2.23 - startup cleanup of stale work/output leftovers
 # 2026.07.16 - v. 2.22 - check RSS for new edition before proceed; quit if none
@@ -122,6 +125,8 @@ load_economist_config() {
 
     assert_economist_conf_permissions "${conf}"
 
+    ECONOMIST_CONFIG_FILE="${conf}"
+
     # shellcheck source=/dev/null
     source "${conf}"
 
@@ -134,6 +139,170 @@ load_economist_config() {
     : "${CURL_IMPERSONATE:=/usr/local/bin/curl-impersonate/curl_chrome116}"
     : "${HEALTHCHECK_URL:=}"
     : "${ECONOMIST_LOCK_FILE:=/var/lock/economist-runme.lock}"
+}
+
+economist_config_is_blank() {
+    [[ -z "${1//[[:space:]]/}" ]]
+}
+
+economist_config_add_error() {
+    local -n _errs=$1
+    local message="$2"
+
+    _errs+=("${message}")
+}
+
+economist_config_require_non_blank() {
+    local -n _errs=$1
+    local name="$2" value="${3:-}"
+
+    if economist_config_is_blank "${value}"; then
+        economist_config_add_error _errs "${name} is not set or empty"
+        return 1
+    fi
+    return 0
+}
+
+economist_config_require_abs_dir_path() {
+    local -n _errs=$1
+    local name="$2" value="${3:-}" parent
+
+    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+
+    if [[ "${value}" != /* ]]; then
+        economist_config_add_error _errs "${name} must be an absolute path (got: ${value})"
+        return 1
+    fi
+
+    parent="$(dirname "${value}")"
+    if [[ ! -d "${parent}" && ! -d "${value}" ]]; then
+        economist_config_add_error _errs "${name} parent directory does not exist: ${parent}"
+        return 1
+    fi
+    return 0
+}
+
+economist_config_require_http_url() {
+    local -n _errs=$1
+    local name="$2" value="${3:-}"
+
+    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+
+    if [[ ! "${value}" =~ ^https?://[^[:space:]]+$ ]]; then
+        economist_config_add_error _errs "${name} must be an http(s) URL (got: ${value})"
+        return 1
+    fi
+    return 0
+}
+
+economist_config_require_executable() {
+    local -n _errs=$1
+    local name="$2" value="${3:-}"
+
+    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+
+    if [[ ! -x "${value}" ]]; then
+        economist_config_add_error _errs "${name} is not executable: ${value}"
+        return 1
+    fi
+    return 0
+}
+
+economist_config_validate_file_owner() {
+    local -n _errs=$1
+    local owner="${2:-}" user group
+
+    if economist_config_is_blank "${owner}"; then
+        return 0
+    fi
+
+    if [[ ! "${owner}" =~ ^[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?$ ]]; then
+        economist_config_add_error _errs \
+            "ECONOMIST_FILE_OWNER must be user or user:group (got: ${owner})"
+        return 1
+    fi
+
+    if [[ "${owner}" == *:* ]]; then
+        user="${owner%%:*}"
+        group="${owner#*:}"
+        if [[ -n "${user}" ]] && ! getent passwd "${user}" >/dev/null 2>&1; then
+            economist_config_add_error _errs \
+                "ECONOMIST_FILE_OWNER user does not exist: ${user}"
+        fi
+        if [[ -n "${group}" ]] && ! getent group "${group}" >/dev/null 2>&1; then
+            economist_config_add_error _errs \
+                "ECONOMIST_FILE_OWNER group does not exist: ${group}"
+        fi
+    elif ! getent passwd "${owner}" >/dev/null 2>&1; then
+        economist_config_add_error _errs \
+            "ECONOMIST_FILE_OWNER user does not exist: ${owner}"
+    fi
+}
+
+validate_economist_config() {
+    local -a errors=()
+
+    economist_config_require_http_url errors "ECONOMIST_RSS_URL" "${ECONOMIST_RSS_URL:-}"
+    if ! economist_config_is_blank "${ECONOMIST_RSS_URL:-}" \
+        && [[ ! "${ECONOMIST_RSS_URL}" =~ ^https://feeds\.economist\.com/v1/rss/weekly/[A-Za-z0-9-]+$ ]]; then
+        economist_config_add_error errors \
+            "ECONOMIST_RSS_URL must look like https://feeds.economist.com/v1/rss/weekly/YOUR-UUID"
+    fi
+
+    if ! economist_config_is_blank "${HEALTHCHECK_URL:-}"; then
+        economist_config_require_http_url errors "HEALTHCHECK_URL" "${HEALTHCHECK_URL}"
+    fi
+
+    economist_config_require_abs_dir_path errors "ECONOMIST_BASE_DIR" "${ECONOMIST_BASE_DIR:-}"
+    economist_config_require_abs_dir_path errors "ECONOMIST_WORK_DIR" "${ECONOMIST_WORK_DIR:-}"
+    economist_config_require_abs_dir_path errors "ECONOMIST_OUTPUT_DIR" "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_config_require_abs_dir_path errors "ECONOMIST_ARCHIVE_DIR" "${ECONOMIST_ARCHIVE_DIR:-}"
+
+    if ! economist_config_is_blank "${ECONOMIST_WORK_DIR:-}" \
+        && ! economist_config_is_blank "${ECONOMIST_OUTPUT_DIR:-}" \
+        && [[ "${ECONOMIST_WORK_DIR}" == "${ECONOMIST_OUTPUT_DIR}" ]]; then
+        economist_config_add_error errors \
+            "ECONOMIST_WORK_DIR and ECONOMIST_OUTPUT_DIR must not be the same path"
+    fi
+
+    economist_config_require_executable errors "FFMPEG_PATH" "${FFMPEG_PATH:-}"
+    economist_config_validate_file_owner errors "${ECONOMIST_FILE_OWNER:-}"
+
+    if ((${#errors[@]} > 0)); then
+        echo "Invalid economist.local.conf:" >&2
+        local err
+        for err in "${errors[@]}"; do
+            echo "  - ${err}" >&2
+        done
+        exit 1
+    fi
+}
+
+economist_print_config_ok() {
+    local hc_state owner_state
+
+    if economist_config_is_blank "${HEALTHCHECK_URL:-}"; then
+        hc_state="disabled"
+    else
+        hc_state="${HEALTHCHECK_URL}"
+    fi
+
+    if economist_config_is_blank "${ECONOMIST_FILE_OWNER:-}"; then
+        owner_state="(skip chown)"
+    else
+        owner_state="${ECONOMIST_FILE_OWNER}"
+    fi
+
+    echo "---------- Config ----------"
+    economist_summary_line "Config file:" "${ECONOMIST_CONFIG_FILE:-economist.local.conf}"
+    economist_summary_line "Work dir:" "${ECONOMIST_WORK_DIR:-}"
+    economist_summary_line "Output dir:" "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_summary_line "Archive dir:" "${ECONOMIST_ARCHIVE_DIR:-}"
+    economist_summary_line "FFmpeg:" "${FFMPEG_PATH:-}"
+    economist_summary_line "File owner:" "${owner_state}"
+    economist_summary_line "Healthcheck:" "${hc_state}"
+    economist_summary_line "Status:" "loaded and validated OK"
+    echo "----------------------------"
 }
 
 require_economist_rss_url() {
@@ -441,6 +610,8 @@ economist_prompt_proceed_before_download() {
     fi
 
     issue_no="$(economist_issue_number_for_edition_date "${iso}" 2>/dev/null || echo "—")"
+    echo
+    economist_print_config_ok
     echo
     echo "New edition on the server: ${iso} (issue ${issue_no})."
     economist_read_tty_char "Proceed with download? [Y/n/q] (10s): " answer 10
