@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.225602 - show-available pick: Q quits immediately (no Enter)
 # v. 20260716.225501 - show-available: newest is #1; add age column (y/m/d)
 # v. 20260716.162602 - shared config loader, validation, RSS helpers, run summary
 # Shared library: config, header lookup, Ctrl-C cleanup, and run summary.
@@ -556,6 +557,47 @@ economist_read_tty_char() {
     _char_ref="${_char_ref//$'\r'/}"
 }
 
+economist_read_tty_pick_choice() {
+    local prompt="$1"
+    local -n _choice_ref="$2"
+    local first="" rest=""
+
+    _choice_ref=""
+    echo -n "${prompt}"
+    if [[ -r /dev/tty ]]; then
+        IFS= read -r -n 1 first </dev/tty || first=""
+    else
+        IFS= read -r -n 1 first || first=""
+    fi
+
+    case "${first}" in
+        $'\n'|'')
+            echo
+            return 0
+            ;;
+        q|Q)
+            _choice_ref="q"
+            echo
+            return 0
+            ;;
+        [0-9])
+            if [[ -r /dev/tty ]]; then
+                IFS= read -r rest </dev/tty || rest=""
+            else
+                IFS= read -r rest || rest=""
+            fi
+            _choice_ref="${first}${rest}"
+            _choice_ref="${_choice_ref//[[:space:]]/}"
+            return 0
+            ;;
+        *)
+            echo
+            _choice_ref="?"
+            return 0
+            ;;
+    esac
+}
+
 economist_edition_iso_from_weekly_url() {
     local url="$1"
 
@@ -830,14 +872,19 @@ economist_show_and_pick_available_editions() {
         echo
 
         while true; do
-            economist_read_tty_line "To download: enter 1–${#pick_isos[@]} (1 = newest) and press Enter, or Enter/Q to quit: " choice
+            economist_read_tty_pick_choice \
+                "To download: enter 1–${#pick_isos[@]} (1 = newest); Q quits; Enter quits: " \
+                choice
 
             case "${choice}" in
                 q|Q|'')
                     return 0
                     ;;
+                \?)
+                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, Q to quit, or Enter to quit."
+                    ;;
                 *[!0-9]*)
-                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
+                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, Q to quit, or Enter to quit."
                     ;;
                 *)
                     choice=$((10#${choice}))
@@ -845,7 +892,7 @@ economist_show_and_pick_available_editions() {
                         sel_idx=$((choice - 1))
                         break
                     fi
-                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, or press Enter to quit."
+                    echo "Invalid input — enter 1–${#pick_isos[@]} to download, Q to quit, or Enter to quit."
                     ;;
             esac
         done
