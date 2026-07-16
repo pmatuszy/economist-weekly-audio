@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.225703 - show-available: oldest at top, #1 = newest at bottom
 # v. 20260716.225602 - show-available pick: Q quits immediately (no Enter)
 # v. 20260716.225501 - show-available: newest is #1; add age column (y/m/d)
 # v. 20260716.162602 - shared config loader, validation, RSS helpers, run summary
@@ -836,14 +837,28 @@ economist_show_and_pick_available_editions() {
         return 1
     fi
 
+    if [[ ${#pick_isos[@]} -gt 1 ]]; then
+        local -a _rev_isos=() _rev_titles=() _rev_local=() _rev_issues=()
+        for (( idx = ${#pick_isos[@]} - 1; idx >= 0; --idx )); do
+            _rev_isos+=("${pick_isos[idx]}")
+            _rev_titles+=("${pick_titles[idx]}")
+            _rev_local+=("${pick_local[idx]}")
+            _rev_issues+=("${pick_issues[idx]}")
+        done
+        pick_isos=("${_rev_isos[@]}")
+        pick_titles=("${_rev_titles[@]}")
+        pick_local=("${_rev_local[@]}")
+        pick_issues=("${_rev_issues[@]}")
+    fi
+
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
         echo
-        echo "Verified editions (#1 = newest):"
+        echo "Verified editions (oldest at top; #1 = newest at bottom):"
         printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
         printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "---" "--------" "-----" "-----" "-----" "---------"
         for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
             printf '  %-3s %-12s %-36s %-18s %-6s %s\n' \
-                "$((idx + 1))" \
+                "$(( ${#pick_isos[@]} - idx ))" \
                 "${pick_isos[idx]}" \
                 "${pick_titles[idx]:0:36}" \
                 "${pick_local[idx]:0:18}" \
@@ -857,12 +872,12 @@ economist_show_and_pick_available_editions() {
 
     while true; do
         echo
-        echo "Verified editions (#1 = newest):"
+        echo "Verified editions (oldest at top; #1 = newest at bottom):"
         printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
         printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "---" "--------" "-----" "-----" "-----" "---------"
         for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
             printf '  %-3s %-12s %-36s %-18s %-6s %s\n' \
-                "$((idx + 1))" \
+                "$(( ${#pick_isos[@]} - idx ))" \
                 "${pick_isos[idx]}" \
                 "${pick_titles[idx]:0:36}" \
                 "${pick_local[idx]:0:18}" \
@@ -889,7 +904,7 @@ economist_show_and_pick_available_editions() {
                 *)
                     choice=$((10#${choice}))
                     if (( choice >= 1 && choice <= ${#pick_isos[@]} )); then
-                        sel_idx=$((choice - 1))
+                        sel_idx=$((${#pick_isos[@]} - choice))
                         break
                     fi
                     echo "Invalid input — enter 1–${#pick_isos[@]} to download, Q to quit, or Enter to quit."
