@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.23 - startup cleanup of stale work/output leftovers
 # 2026.07.16 - v. 2.22 - check RSS for new edition before proceed; quit if none
 # 2026.07.16 - v. 2.21 - verify edition on RSS server; proceed prompt before download
 # 2026.07.16 - v. 2.20 - summary on show-available quit; result label for no selection
@@ -757,6 +758,66 @@ economist_mark_finish_time() {
 
 economist_set_run_step() {
     ECONOMIST_RUN_STEP="$1"
+}
+
+economist_work_dir_has_pipeline_artifacts() {
+    local work_dir="$1" item=""
+
+    [[ -n "${work_dir}" && -d "${work_dir}" ]] || return 1
+
+    [[ -f "${work_dir}/economist.rss" || -f "${work_dir}/economist.mp3" || -f "${work_dir}/chapters.txt" ]] && return 0
+    [[ -f "${work_dir}/_org_file.rar" || -f "${work_dir}/_org_mp3_files_NO_speechnorm_NO_speedup.rar" ]] && return 0
+
+    shopt -s nullglob
+    for item in \
+        "${work_dir}"/artwork_*.jpg \
+        "${work_dir}"/tmp_*.mp3 \
+        "${work_dir}"/*_tmp.mp3 \
+        "${work_dir}"/*.mp3 \
+        "${work_dir}"/*SPEECHNORM_SPEEDUP* \
+        "${work_dir}"/*_TheEconomist
+    do
+        if [[ -e "${item}" ]]; then
+            shopt -u nullglob
+            return 0
+        fi
+    done
+    shopt -u nullglob
+
+    return 1
+}
+
+economist_cleanup_stale_run_leftovers() {
+    local work_dir="$1" output_dir="$2"
+    local found=0 d=""
+
+    if economist_work_dir_has_pipeline_artifacts "${work_dir}"; then
+        found=1
+        echo
+        echo "Found leftovers from a previous incomplete run in the work directory."
+        economist_cleanup_work_dir "${work_dir}" 1
+    fi
+
+    if [[ -d "${output_dir}" ]]; then
+        shopt -s nullglob
+        for d in "${output_dir}"/*_TheEconomist; do
+            [[ -d "${d}" ]] || continue
+            [[ -n "$(ls -A "${d}" 2>/dev/null)" ]] && continue
+            if (( ! found )); then
+                echo
+                echo "Found leftovers from a previous incomplete run."
+                found=1
+            fi
+            echo "  removing empty output directory: ${d}"
+            rmdir --ignore-fail-on-non-empty "${d}" 2>/dev/null || true
+        done
+        shopt -u nullglob
+    fi
+
+    if (( found )); then
+        echo "Startup cleanup finished."
+        echo
+    fi
 }
 
 economist_cleanup_work_dir() {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.19 - startup cleanup of leftovers from failed previous run
 # 2026.07.16 - v. 1.18 - drop website archive line on download; clarify on quit only
 # 2026.07.16 - v. 1.17 - quit when no new RSS edition; proceed prompt only if new
 # 2026.07.16 - v. 1.16 - RSS verify + proceed prompt before download (10s, Y default)
@@ -204,6 +205,8 @@ if (( exit_code != 0 )); then
     echo "Something went wrong — cannot change to directory \"${work_dir}\" (exit code ${exit_code})"
     economist_exit_pipeline "${exit_code}"
 fi
+
+economist_cleanup_stale_run_leftovers "${work_dir}" "${output_dir}"
 
 export wget_params economist_url
 
