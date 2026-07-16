@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.37 - ASCII-only table separators (no UTF-8 box-drawing)
 # 2026.07.16 - v. 1.36 - --yes keeps installed config; N/q on config prompt continue install
 # 2026.07.15 - v. 1.35 - cleanup cron uses economist-cleanup-empty-dirs.sh (safe paths)
 # 2026.07.15 - v. 1.34 - archive cron uses economist-archive-editions.sh (replace on collision)
@@ -224,11 +225,11 @@ economist_script_install_marker() {
     if [[ "${current_ver}" == missing ]]; then
         echo "+"
     elif [[ "${current_ver}" == unknown || "${new_ver}" == unknown ]]; then
-        echo "→"
+        echo "->"
     elif [[ "${current_ver}" == "${new_ver}" && "${current_parsed}" == "${new_parsed}" ]]; then
         echo "="
     else
-        echo "→"
+        echo "->"
     fi
 }
 
@@ -258,7 +259,7 @@ print_scripts_install_plan() {
         "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
         "${SCRIPT_INSTALL_VER_WIDTH}" "Installed" \
         "Repository"
-    printf '  %.*s\n' 78 '──────────────────────────────────────────────────────────────────────────────'
+    printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
     for script_path in "${SCRIPT_PATHS[@]}"; do
         name="$(basename "${script_path}")"
         target="${BIN_DIR}/${name}"
@@ -266,7 +267,7 @@ print_scripts_install_plan() {
     done
     print_script_version_row "_load-config.sh" "${BIN_DIR}/_load-config.sh" "${SCRIPTS_DIR}/_load-config.sh"
     echo
-    echo "  Legend:  + new   → update   = unchanged"
+    echo "  Legend:  + new   -> update   = unchanged"
     echo
 }
 
@@ -732,7 +733,7 @@ install_bin_scripts() {
         "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
         "${SCRIPT_INSTALL_VER_WIDTH}" "Was" \
         "Now"
-    printf '  %.*s\n' 78 '──────────────────────────────────────────────────────────────────────────────'
+    printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
 
     for script_path in "${SCRIPT_PATHS[@]}"; do
         name="$(basename "${script_path}")"
@@ -1136,8 +1137,8 @@ offer_crontab_obsolete_migration() {
         echo "Your crontab uses an old economist format, for example:"
         echo "  - /usr/bin/flock wrapping \${ECONOMIST_MAIN_SCRIPT} (or legacy \${ECONOMIST_RUN})"
         echo "  - ECONOMIST_RUN= renamed to ECONOMIST_MAIN_SCRIPT"
-        echo "  - /bin/mv for archive → use economist-archive-editions.sh (replaces existing copies)"
-        echo "  - find on \${ECONOMIST_OUTPUT} → use economist-cleanup-empty-dirs.sh"
+        echo "  - /bin/mv for archive -> use economist-archive-editions.sh (replaces existing copies)"
+        echo "  - find on \${ECONOMIST_OUTPUT} -> use economist-cleanup-empty-dirs.sh"
         echo "  - ECONOMIST_LOCK= in crontab (lock is now inside the script)"
         echo "  - ECONOMIST_LOG under /root/var/log instead of /var/log"
         echo

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.6 - ASCII-only version banner (no UTF-8 box-drawing)
 # 2026.07.16 - v. 1.5 - interactive discard of dirty clone; align with -y behavior
 # 2026.07.16 - v. 1.4 - do not chmod repo clone (keeps git pull clean)
 # 2026.07.16 - v. 1.3 - discard local scripts/ edits before git pull (-y)
@@ -27,10 +28,10 @@ print_version_banner() {
     else
         verline="Version: ${ver}"
     fi
-    printf '┌%*s┐\n' "$width" '' | tr ' ' '─'
-    printf '│ %-*.*s │\n' $((width - 2)) $((width - 2)) "$title"
-    printf '│ %-*.*s │\n' $((width - 2)) $((width - 2)) "$verline"
-    printf '└%*s┘\n' "$width" '' | tr ' ' '─'
+    printf '+%*s+\n' "$width" '' | tr ' ' '-'
+    printf '| %-*.*s |\n' $((width - 2)) $((width - 2)) "$title"
+    printf '| %-*.*s |\n' $((width - 2)) $((width - 2)) "$verline"
+    printf '+%*s+\n' "$width" '' | tr ' ' '-'
 }
 
 show_help() {
