@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.16 - v. 1.6 - ASCII-only version banner (no UTF-8 box-drawing)
-# 2026.07.16 - v. 1.5 - interactive discard of dirty clone; align with -y behavior
-# 2026.07.16 - v. 1.4 - do not chmod repo clone (keeps git pull clean)
-# 2026.07.16 - v. 1.3 - discard local scripts/ edits before git pull (-y)
-# 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (drop wrapper)
-# 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
-# 2026.07.15 - v. 1.0 - clone/pull economist repos under github/ and run install.sh
+# v. 20260716.162610 - clone/pull repos and run install.sh
 # economist-script-reinstall.sh
 #
 # Ensures ${profile_location_dir:-$HOME}/github/economist-weekly-audio (and private
@@ -14,20 +8,23 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 print_version_banner() {
-    local ver=unknown date= line title verline width=60
+    local ver=unknown line title verline width=60
     while IFS= read -r line; do
-        if [[ "$line" =~ ^#\ ([0-9]{4}\.[0-9]{2}\.[0-9]{2})\ -\ v\.\ ([0-9]+(\.[0-9]+)*) ]]; then
-            date="${BASH_REMATCH[1]}"
-            ver="${BASH_REMATCH[2]}"
+        if [[ "$line" =~ ^#[[:space:]]*v\.[[:space:]]*([0-9]{8}\.[0-9]{6}) ]]; then
+            ver="${BASH_REMATCH[1]}"
+            break
+        fi
+        if [[ "$line" =~ ^#[[:space:]]*([0-9]{4}\.[0-9]{2}\.[0-9]{2})[[:space:]]+-[[:space:]]+v\.[[:space:]]*([0-9]+(\.[0-9]+)*) ]]; then
+            ver="${BASH_REMATCH[2]} (${BASH_REMATCH[1]})"
+            break
+        fi
+        if [[ "$line" =~ ^#[[:space:]]*v\.[[:space:]]*([0-9]+(\.[0-9]+)*)[[:space:]]+-[[:space:]]+([0-9]{4}\.[0-9]{2}\.[0-9]{2}) ]]; then
+            ver="${BASH_REMATCH[1]} (${BASH_REMATCH[3]})"
             break
         fi
     done < "$0"
     title="$(basename "$0")"
-    if [[ -n "$date" ]]; then
-        verline="Version: ${ver} (${date})"
-    else
-        verline="Version: ${ver}"
-    fi
+    verline="Version: v. ${ver}"
     printf '+%*s+\n' "$width" '' | tr ' ' '-'
     printf '| %-*.*s |\n' $((width - 2)) $((width - 2)) "$title"
     printf '| %-*.*s |\n' $((width - 2)) $((width - 2)) "$verline"

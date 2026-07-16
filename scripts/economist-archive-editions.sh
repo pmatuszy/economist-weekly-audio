@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.15 - v. 1.0 - move output editions to archive, replacing existing copies
+# v. 20260716.162608 - cron: move output editions to archive
 # Moves processed edition folders from ECONOMIST_OUTPUT_DIR to ECONOMIST_ARCHIVE_DIR.
 # If the same edition name already exists in archive, it is removed first.
 

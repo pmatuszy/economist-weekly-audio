@@ -1,0 +1,38 @@
+---
+description: Economist shell script version comment format (YYYYMMDD.HH24MISS)
+globs: "{install.sh,scripts/**/*.sh}"
+alwaysApply: false
+---
+
+# Script versioning
+
+When changing any script under `scripts/` or `install.sh`, bump the **first** version comment line (newest entry, within the first 40 lines).
+
+## Format
+
+```bash
+# v. YYYYMMDD.HH24MISS - short description of this change
+```
+
+- Use local wall-clock time when you edit (24-hour `HHMMSS`, zero-padded).
+- Keep one new line at the top of the changelog block (after shebang / `# shellcheck` line).
+- Older changelog lines may stay for history; only the first matching line is parsed.
+
+## Examples
+
+```bash
+#!/usr/bin/env bash
+# v. 20260716.162603 - quit when no new RSS edition on server
+# v. 20260716.162601 - adopt YYYYMMDD.HH24MISS versioning scheme
+```
+
+```bash
+# shellcheck shell=bash
+# v. 20260716.162602 - validate economist.local.conf before pipeline starts
+```
+
+## Parsing
+
+`install.sh` (`economist_parse_script_version`) and `economist-script-reinstall.sh` read this format. Install table shows `v. 20260716.162603`.
+
+Legacy `# YYYY.MM.DD - v. N.N - ...` lines are still parsed for old installed copies only — do not add new legacy lines.

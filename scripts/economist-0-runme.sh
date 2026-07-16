@@ -1,34 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.16 - v. 1.24 - config summary printed before proceed prompt
-# 2026.07.16 - v. 1.23 - print config loaded OK before script header
-# 2026.07.16 - v. 1.22 - validate config before script header banner
-# 2026.07.16 - v. 1.21 - validate economist.local.conf before pipeline starts
-# 2026.07.16 - v. 1.20 - edition output dirs use YYYYMMDD_TheEconomist (no dots)
-# 2026.07.16 - v. 1.19 - startup cleanup of leftovers from failed previous run
-# 2026.07.16 - v. 1.18 - drop website archive line on download; clarify on quit only
-# 2026.07.16 - v. 1.17 - quit when no new RSS edition; proceed prompt only if new
-# 2026.07.16 - v. 1.16 - RSS verify + proceed prompt before download (10s, Y default)
-# 2026.07.16 - v. 1.15 - print summary when user quits show-available without picking
-# 2026.07.16 - v. 1.14 - show-available confirm pick; force reprocess when confirmed
-# 2026.07.15 - v. 1.13 - --show-available lists verified RSS editions and interactive pick
-# 2026.07.15 - v. 1.12 - pipeline exit records finish time before summary
-# 2026.07.15 - v. 1.11 - align debug label values in a fixed column
-# 2026.07.15 - v. 1.10 - clearer English debug labels
-# 2026.07.15 - v. 1.9 - dot _script_header.sh at script top level (fixes banner)
-# 2026.07.15 - v. 1.7 - Ctrl-C cleanup, pipeline summary, improved child step capture
-# v. 1.5 - 2026.07.15 - renamed to economist-0-runme.sh; call economist-1..4-*.sh
-# v. 1.3 - 2026.07.15 - restored numbered names 0-4-economist-*.sh
-# v. 1.1 - 2026.07.15 - added script description header
-# v. 1.0 - 2026.06.19 - runtime messages translated to English
-# v. 0.9 - 2026.06.19 - changelog comments translated to English
-# v. 0.8 - 2026.06.19 - child scripts: English filenames (download, process-edition, speedup-loudness, move-results)
-# v. 0.7 - 2026.06.16 - secrets in economist.local.conf; child scripts via SCRIPT_DIR
-# v. 0.6 - 2025.04.18 - ping healthcheck OK when output directory already exists (edition already downloaded)
-# v. 0.5 - 2025.01.28 - major changes after The Economist portal changes
-# v. 0.4 - 2022.05.06 - added healthcheck support
-# v. 0.3 - 2021.06.07 - check exit codes from all child scripts
-# v. 0.2 - 2021.04.19 - check exit code from 1-economist-download.sh
-# v. 0.1 - 2018.07.31 - initial release
+# v. 20260716.162603 - orchestrate full pipeline with healthcheck pings
 # Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
 
 if [[ "${0:-}" == *"/scripts/"* ]] || [[ "$(basename "${0:-}")" == 0-economist-runme.sh ]]; then

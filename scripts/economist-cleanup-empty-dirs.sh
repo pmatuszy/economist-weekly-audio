@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.15 - v. 1.0 - remove empty edition subdirs under ECONOMIST_OUTPUT_DIR
+# v. 20260716.162609 - cron: remove empty edition subdirs under output
 # Safe cron helper: paths come from economist.local.conf, not unexpanded shell variables.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

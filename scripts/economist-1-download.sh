@@ -1,15 +1,5 @@
 #!/bin/bash
-# 2026.07.15 - v. 3.5 - source github-bin _script_header.sh directly (drop wrapper)
-# v. 3.2 - 2026.07.15 - renamed to economist-1-download.sh
-# v. 3.1 - 2026.07.15 - restored numbered name 1-economist-download.sh
-# v. 2.10 - 2026.07.15 - added script description header
-# v. 2.8 - 2026.06.19 - runtime messages translated to English
-# v. 2.7 - 2026.06.19 - changelog comments translated to English
-# v. 2.6 - 2026.06.19 - renamed from 1-economist-sciagnij.sh
-# v. 2.5 - 2026.06.16 - RSS URL from economist.local.conf (not in git)
-# v. 2.4 - 2025.09.17 - auto-tip for xmllint + grep fallback when xmllint missing or returns 0
-# v. 2.3 - 2025.09.17 - added echo/logging
-# v. 2.2 - 2025.09.17 - optional YYYY-MM-DD selects n-th RSS item (xmllint); default is first enclosure
+# v. 20260716.162604 - download weekly Economist MP3 from personal RSS feed
 # Downloads the weekly Economist MP3 from the personal RSS feed.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

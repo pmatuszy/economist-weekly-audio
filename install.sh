@@ -1,41 +1,5 @@
 #!/usr/bin/env bash
-# 2026.07.16 - v. 1.37 - ASCII-only table separators (no UTF-8 box-drawing)
-# 2026.07.16 - v. 1.36 - --yes keeps installed config; N/q on config prompt continue install
-# 2026.07.15 - v. 1.35 - cleanup cron uses economist-cleanup-empty-dirs.sh (safe paths)
-# 2026.07.15 - v. 1.34 - archive cron uses economist-archive-editions.sh (replace on collision)
-# 2026.07.15 - v. 1.33 - crontab var ECONOMIST_RUN renamed to ECONOMIST_MAIN_SCRIPT
-# 2026.07.15 - v. 1.32 - detect outdated economist cron blocks (flock wrapper, old paths)
-# 2026.07.15 - v. 1.31 - cron runs script directly; flock is acquired inside scripts
-# 2026.07.15 - v. 1.30 - show installed vs repository script versions in install plan
-# 2026.07.15 - v. 1.29 - merge run-control into _load-config.sh; drop separate helper file
-# 2026.07.15 - v. 1.28 - ECONOMIST_LOCK defaults to /var/lock/economist-runme.lock
-# 2026.07.15 - v. 1.27 - ECONOMIST_LOG defaults to /var/log/economist-runme.log
-# 2026.07.15 - v. 1.26 - skip crontab hint when active economist jobs already exist
-# 2026.07.15 - v. 1.25 - skip cron migration when active economist-0-runme jobs already exist
-# 2026.07.15 - v. 1.24 - ignore already-commented cron lines when detecting obsolete entries
-# 2026.07.15 - v. 1.23 - after cron migration show old (commented) and new sections
-# 2026.07.15 - v. 1.22 - offer to comment out obsolete economist cron lines and add new block
-# 2026.07.15 - v. 1.21 - offer removal of obsolete /root/scripts Polish-era copies
-# 2026.07.15 - v. 1.20 - drop _economist-script-header.sh; use github-bin _script_header.sh
-# 2026.07.15 - v. 1.19 - install _economist-run-control.sh; Ctrl-C cleanup and pipeline summary
-# v. 1.17 - 2026.07.15 - install economist-script-reinstall.sh into bin/
-# v. 1.16 - 2026.07.15 - section separators; flock check for crontab hint
-# v. 1.15 - 2026.07.15 - print crontab hint after install (paths, flock, archive)
-# v. 1.14 - 2026.07.15 - create starter config from example when none exists
-# v. 1.13 - 2026.07.15 - install script copies into bin/, not repo exec wrappers
-# v. 1.12 - 2026.07.15 - pipeline scripts use economist-N-*.sh names
-# v. 1.11 - 2026.07.15 - pipeline scripts restored to 0-4-economist-*.sh names
-# v. 1.10 - 2026.07.15 - config replace: description, paths, then prompt line
-# v. 1.9 - 2026.07.15 - config replace prompt: aligned paths, no one-liner
-# v. 1.8 - 2026.07.15 - offer to replace conf/ config from private repo (20s, default N)
-# v. 1.7 - 2026.07.15 - wrappers economist-*.sh; prompt to remove legacy numbered names
-# v. 1.6 - 2026.07.15 - prompts default no [y/N/q]; --yes still auto-yes
-# v. 1.5 - 2026.07.15 - prompts default yes [Y/n/q]; --yes auto-fixes chmod 600
-# v. 1.4 - 2026.07.15 - prompts: single key [y/N/q], 300s timeout, default N
-# v. 1.3 - 2026.07.15 - install economist.local.conf into conf/ beside bin/
-# v. 1.2 - 2026.07.15 - check private config file permissions are 600
-# v. 1.1 - 2026.07.15 - use profile_location_dir when set, else HOME
-# v. 1.0 - 2026.07.15 - interactive install of wrappers into ~/bin from ~/github clone
+# v. 20260716.162701 - install scripts into bin/conf; parse timestamp versions
 # Copies economist-N-*.sh scripts into bin/; child scripts run from same directory.
 # Single-key prompts [y/N/q] with 300s timeout; default is no.
 
@@ -164,8 +128,11 @@ LOCAL_CONF="${REPO_ROOT}/economist.local.conf"
 CONFIG_PATH_LABEL_WIDTH=8
 CONFIG_PATH_TEXT_COL=12
 SCRIPT_INSTALL_NAME_WIDTH=34
-SCRIPT_INSTALL_VER_WIDTH=20
+SCRIPT_INSTALL_VER_WIDTH=22
 
+# Parse the newest version from script header comments (first 40 lines).
+# Current format:  # v. YYYYMMDD.HH24MISS - change description
+# Legacy formats:  # YYYY.MM.DD - v. N.N - ...  or  # v. N.N - YYYY.MM.DD - ...
 economist_parse_script_version() {
     local file="$1" line="" ver="" date="" line_no=0
 
@@ -178,6 +145,11 @@ economist_parse_script_version() {
         ((++line_no))
         (( line_no > 40 )) && break
 
+        if [[ "${line}" =~ ^#[[:space:]]*v\.[[:space:]]*([0-9]{8}\.[0-9]{6}) ]]; then
+            ver="${BASH_REMATCH[1]}"
+            echo "${ver}|"
+            return 0
+        fi
         if [[ "${line}" =~ ^#[[:space:]]*([0-9]{4}\.[0-9]{2}\.[0-9]{2})[[:space:]]+-[[:space:]]+v\.[[:space:]]*([0-9]+(\.[0-9]+)*) ]]; then
             date="${BASH_REMATCH[1]}"
             ver="${BASH_REMATCH[2]}"
@@ -209,10 +181,12 @@ economist_format_script_version() {
             printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "unknown"
             ;;
         *)
-            if [[ -n "${date}" ]]; then
-                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v${ver} (${date})"
+            if [[ "${ver}" =~ ^[0-9]{8}\.[0-9]{6}$ ]]; then
+                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver}"
+            elif [[ -n "${date}" ]]; then
+                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver} (${date})"
             else
-                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v${ver}"
+                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver}"
             fi
             ;;
     esac

@@ -1,19 +1,5 @@
 #!/bin/bash
-# 2026.07.16 - v. 2.8 - edition folder YYYYMMDD_TheEconomist (no dots in dir name)
-# 2026.07.15 - v. 2.7 - archive unprocessed chapter MP3s before speedup step
-# 2026.07.15 - v. 2.6 - rename chapter start/end vars; strip CR; harden set -u parsing
-# 2026.07.15 - v. 2.5 - ignore global ffmetadata title; fix unbound start/end under set -u
-# 2026.07.15 - v. 2.4 - source github-bin _script_header.sh directly (drop wrapper)
-# v. 2.1 - 2026.07.15 - renamed to economist-2-process-edition.sh
-# v. 2.0 - 2026.07.15 - restored numbered name 2-economist-process-edition.sh
-# v. 1.8 - 2026.07.15 - added script description header
-# v. 1.6 - 2026.06.19 - runtime messages translated to English
-# v. 1.5 - 2026.06.19 - changelog comments translated to English
-# v. 1.4 - 2026.06.19 - renamed from 2-economist-obrob.sh
-# v. 1.3 - 2026.06.16 - paths and chown from economist.local.conf
-# v. 1.2 - 2025.10.27 - bugfix: removed -df from rar for artwork — it was deleting the input file
-# v. 1.1 - 2025.10.21 - artwork file is added to output RAR but not deleted
-# v. 1.0 - 2025.01.28 - major rewrite — practically a new script
+# v. 20260716.162605 - split chapters, embed artwork, rename, archive original MP3
 # Splits chapters, embeds artwork, renames files, and archives the original MP3.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

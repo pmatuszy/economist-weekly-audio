@@ -1,35 +1,5 @@
 # shellcheck shell=bash
-# 2026.07.16 - v. 2.29 - fix circular nameref when collecting config errors
-# 2026.07.16 - v. 2.28 - detailed config checks: dir write, ffmpeg run, file owner
-# 2026.07.16 - v. 2.27 - print config summary immediately before proceed prompt
-# 2026.07.16 - v. 2.26 - ECONOMIST_CONFIG_FILE; print config OK after validation
-# 2026.07.16 - v. 2.25 - validate_economist_config for main pipeline startup
-# 2026.07.16 - v. 2.24 - edition dirs YYYYMMDD_TheEconomist (legacy dotted names still recognized)
-# 2026.07.16 - v. 2.23 - startup cleanup of stale work/output leftovers
-# 2026.07.16 - v. 2.22 - check RSS for new edition before proceed; quit if none
-# 2026.07.16 - v. 2.21 - verify edition on RSS server; proceed prompt before download
-# 2026.07.16 - v. 2.20 - summary on show-available quit; result label for no selection
-# 2026.07.16 - v. 2.19 - confirm prompt reads one character like install.sh
-# 2026.07.16 - v. 2.18 - fix pick loop for bash without labeled continue
-# 2026.07.16 - v. 2.17 - show-available: confirm pick; N relists; force reprocess
-# 2026.07.16 - v. 2.15 - show-available list: oldest first, newest at bottom
-# 2026.07.16 - v. 2.14 - show-available pick: single-line prompt ending with ": "
-# 2026.07.16 - v. 2.13 - show-available pick: accept leading zeros (e.g. 000010 → 10)
-# 2026.07.15 - v. 2.12 - Issue column shows Economist issue number (e.g. 9419)
-# 2026.07.15 - v. 2.11 - show-available pick prompt: Enter/Q=quit default; number=download
-# 2026.07.15 - v. 2.10 - show-available table: Issue column (RSS feed position)
-# 2026.07.15 - v. 2.9 - show-available: progress dots; Enter defaults to quit
-# 2026.07.15 - v. 2.8 - RSS list/verify helpers; interactive --show-available picker
-# 2026.07.15 - v. 2.7 - pipeline step exit codes: N/A when stage not reached
-# 2026.07.15 - v. 2.6 - summary: edition dir file count; cron archive from/to paths
-# 2026.07.15 - v. 2.5 - cleanup_empty_dirs step label in summary
-# 2026.07.15 - v. 2.4 - ECONOMIST_ARCHIVE_DIR default; archive step label in summary
-# 2026.07.15 - v. 2.3 - clearer pipeline summary labels and step exit codes
-# 2026.07.15 - v. 2.2 - quiet rollback: remove only empty output placeholders
-# 2026.07.15 - v. 2.1 - acquire flock at startup; skip if another instance is running
-# 2026.07.15 - v. 2.0 - merge run-control (traps, summary, cleanup) into this file
-# v. 1.4 - 2026.07.15 - load config from ${profile_location_dir:-$HOME}/conf/
-# v. 1.0 - 2026.06.16 - shared config loader for pipeline scripts
+# v. 20260716.162602 - shared config loader, validation, RSS helpers, run summary
 # Shared library: config, header lookup, Ctrl-C cleanup, and run summary.
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

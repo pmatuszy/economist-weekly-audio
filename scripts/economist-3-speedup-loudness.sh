@@ -1,14 +1,5 @@
 #!/bin/bash
-# 2026.07.15 - v. 3.3 - source github-bin _script_header.sh directly (drop wrapper)
-# v. 3.0 - 2026.07.15 - renamed to economist-3-speedup-loudness.sh
-# v. 2.9 - 2026.07.15 - restored numbered name 3-economist-speedup-loudness.sh
-# v. 2.7 - 2026.07.15 - added script description header
-# v. 2.5 - 2026.07.15 - Polish local variable names translated to English
-# v. 2.4 - 2026.06.19 - runtime messages translated to English
-# v. 2.3 - 2026.06.19 - changelog comments translated to English
-# v. 2.2 - 2026.06.19 - renamed from 3-zmien-szybkosc-podbij-glosnosc.sh
-# v. 2.1 - 2026.06.16 - ffmpeg path from economist.local.conf
-# v. 2.0 - 2025.01.28 - major rewrite — practically a new script
+# v. 20260716.162606 - speed up chapters and apply speech normalization filters
 # Speeds up chapter MP3s and applies speech normalization and loudness filters.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
