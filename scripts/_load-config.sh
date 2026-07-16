@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.231500 - edition date from RSS title cover date (e.g. JULY 18TH 2026 -> 2026-07-18)
 # v. 20260716.230401 - show-available: blank line every 10th pick number
 # v. 20260716.230001 - show-available table: right-align # and age columns
 # v. 20260716.225703 - show-available: oldest at top, #1 = newest at bottom
@@ -377,6 +378,59 @@ economist_edition_date_for_rss_position() {
     date -d "${latest_sat} - $((pos - 1)) weeks" +%F
 }
 
+economist_edition_date_from_rss_title() {
+    local title="$1" month="" day="" year="" iso=""
+
+    [[ -n "${title}" && "${title}" != "—" ]] || return 1
+
+    if [[ "${title}" =~ [Ee]dition:[[:space:]]+([A-Za-z]+)[[:space:]]+([0-9]{1,2})[A-Za-z]*[[:space:]]+([0-9]{4}) ]]; then
+        month="${BASH_REMATCH[1]}"
+        day="${BASH_REMATCH[2]}"
+        year="${BASH_REMATCH[3]}"
+        iso="$(date -d "${month} ${day} ${year}" +%F 2>/dev/null || true)"
+        [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+        echo "${iso}"
+        return 0
+    fi
+
+    return 1
+}
+
+economist_edition_date_for_rss_item() {
+    local rss_file="$1" pos="$2" title="" iso=""
+
+    [[ -n "${rss_file}" && -f "${rss_file}" ]] || return 1
+    [[ "${pos}" =~ ^[0-9]+$ ]] || return 1
+    (( pos >= 1 )) || return 1
+
+    title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+    if iso="$(economist_edition_date_from_rss_title "${title}")"; then
+        echo "${iso}"
+        return 0
+    fi
+
+    economist_edition_date_for_rss_position "${pos}"
+}
+
+economist_rss_position_for_edition_date() {
+    local rss_file="$1" iso="$2" item_count=0 pos=0 edition_at_pos=""
+
+    [[ -n "${rss_file}" && -f "${rss_file}" ]] || return 1
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    (( item_count > 0 )) || return 1
+
+    for (( pos = 1; pos <= item_count; ++pos )); do
+        edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+        [[ "${edition_at_pos}" == "${iso}" ]] || continue
+        echo "${pos}"
+        return 0
+    done
+
+    return 1
+}
+
 economist_edition_dir_basename_for_date() {
     local iso="$1" y m d
 
@@ -621,7 +675,7 @@ economist_verify_edition_date_on_server() {
     (( item_count > 0 )) || return 1
 
     for (( pos = 1; pos <= item_count; ++pos )); do
-        edition_at_pos="$(economist_edition_date_for_rss_position "${pos}")" || continue
+        edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
         [[ "${edition_at_pos}" == "${iso}" ]] || continue
         url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
         [[ -n "${url}" ]] || return 1
@@ -646,7 +700,7 @@ economist_find_newest_verified_rss_edition() {
         url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
         [[ -n "${url}" ]] || continue
         economist_verify_enclosure_on_server "${url}" || continue
-        edition_at_pos="$(economist_edition_date_for_rss_position "${pos}")" || continue
+        edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
         echo "${edition_at_pos}"
         return 0
     done
@@ -844,8 +898,8 @@ economist_show_and_pick_available_editions() {
             continue
         fi
 
-        edition_iso="$(economist_edition_date_for_rss_position "${pos}")" || continue
         title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+        edition_iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
         edition_dir="$(economist_edition_output_dir_for_status "${edition_iso}")"
         local_status="$(economist_local_edition_status "${edition_dir}")"
         issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"

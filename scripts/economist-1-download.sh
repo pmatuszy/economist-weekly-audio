@@ -1,4 +1,5 @@
 #!/bin/bash
+# v. 20260716.231500 - map edition date via RSS title cover date, not release Saturday
 # v. 20260716.162604 - download weekly Economist MP3 from personal RSS feed
 # Downloads the weekly Economist MP3 from the personal RSS feed.
 
@@ -67,34 +68,19 @@ curl -fsSL "${ECONOMIST_RSS_URL}" -o economist.rss
 echo "[INFO] Saved RSS to: $(pwd)/economist.rss"
 
 weeks_position_from_date() {
-  local iso="$1"
+  local iso="$1" pos=""
 
   if [[ ! "$iso" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$(date -d "$iso" +%F 2>/dev/null)" != "$iso" ]]; then
     echo "Expected YYYY-MM-DD (e.g. 2025-08-16)" >&2
     return 2
   fi
 
-  echo "[INFO] Input date: $iso" >&2
-  local dow_in off_in target_sat
-  dow_in=$(date -d "$iso" +%u)
-  off_in=$(( (dow_in + 1) % 7 ))
-  target_sat=$(date -d "$iso - $off_in days" +%F)
-  echo "[INFO] Mapped Saturday (edition): $target_sat (dow=$dow_in, offset=$off_in)" >&2
-
-  local dow_now off_now latest_sat
-  dow_now=$(date +%u)
-  off_now=$(( (dow_now + 1) % 7 ))
-  latest_sat=$(date -d "today - $off_now days" +%F)
-  echo "[INFO] Latest Saturday (reference): $latest_sat (dow_now=$dow_now, offset=$off_now)" >&2
-
-  if (( $(date -d "$target_sat" +%s) > $(date -d "$latest_sat" +%s) )); then
-    echo "Date is in the future vs. latest edition (${latest_sat})." >&2
+  echo "[INFO] Input date (cover date): $iso" >&2
+  pos="$(economist_rss_position_for_edition_date economist.rss "$iso")" || {
+    echo "No feed item matches edition cover date ${iso} (checked RSS titles)." >&2
     return 3
-  fi
-
-  local days=$(( ( $(date -d "$latest_sat" +%s) - $(date -d "$target_sat" +%s) ) / 86400 ))
-  local pos=$(( days / 7 + 1 ))
-  echo "[INFO] Day difference: $days -> RSS position: $pos" >&2
+  }
+  echo "[INFO] RSS position for ${iso}: ${pos}" >&2
   echo "$pos"
 }
 
