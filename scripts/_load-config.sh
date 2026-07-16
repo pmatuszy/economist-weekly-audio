@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.232101 - size: B/kB/MB/GB together; fix dir lookup for processed editions
 # v. 20260716.231801 - show-available: Size column for processed editions (kB/MB/GB)
 # v. 20260716.231501 - fix RSS title cover date parse (EDITION uppercase); status dir aliases
 # v. 20260716.231401 - parse cover date from RSS title (case-insensitive); status alias dirs
@@ -636,6 +637,48 @@ economist_local_edition_status_for_iso() {
     echo "${status}"
 }
 
+economist_resolve_processed_edition_dir() {
+    local iso="$1" alt_iso="${2:-}" dir="" legacy_dir="" rss_file="" pos=""
+
+    dir="$(economist_edition_output_dir_for_date "${iso}")"
+    if [[ -d "${dir}" && -n "$(ls -A "${dir}" 2>/dev/null)" ]]; then
+        echo "${dir}"
+        return 0
+    fi
+
+    legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${iso}")"
+    if [[ -d "${legacy_dir}" && -n "$(ls -A "${legacy_dir}" 2>/dev/null)" ]]; then
+        echo "${legacy_dir}"
+        return 0
+    fi
+
+    if [[ -z "${alt_iso}" ]]; then
+        rss_file="$(mktemp)"
+        if economist_rss_fetch_to "${rss_file}"; then
+            pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+            if [[ -n "${pos}" ]]; then
+                alt_iso="$(economist_edition_date_for_rss_position "${pos}")"
+            fi
+        fi
+        rm -f "${rss_file}"
+    fi
+
+    if [[ -n "${alt_iso}" ]]; then
+        dir="$(economist_edition_output_dir_for_date "${alt_iso}")"
+        if [[ -d "${dir}" && -n "$(ls -A "${dir}" 2>/dev/null)" ]]; then
+            echo "${dir}"
+            return 0
+        fi
+        legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${alt_iso}")"
+        if [[ -d "${legacy_dir}" && -n "$(ls -A "${legacy_dir}" 2>/dev/null)" ]]; then
+            echo "${legacy_dir}"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 economist_read_tty_line() {
     local prompt="$1"
     local -n _line_ref="$2"
@@ -867,75 +910,57 @@ economist_format_age_from_today() {
     printf '%2sy %2sm %2sd' "${cy}" "${cm}" "${cd}"
 }
 
-economist_edition_processed_dir_for_iso() {
-    local iso="$1" alt_iso="${2:-}" dir="" legacy_dir=""
-
-    dir="$(economist_edition_output_dir_for_status "${iso}")"
-    if [[ -d "${dir}" && -n "$(ls -A "${dir}" 2>/dev/null)" ]]; then
-        echo "${dir}"
-        return 0
-    fi
-
-    legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${iso}")"
-    if [[ -d "${legacy_dir}" && -n "$(ls -A "${legacy_dir}" 2>/dev/null)" ]]; then
-        echo "${legacy_dir}"
-        return 0
-    fi
-
-    if [[ -n "${alt_iso}" && "${alt_iso}" != "${iso}" ]]; then
-        dir="$(economist_edition_output_dir_for_status "${alt_iso}")"
-        if [[ -d "${dir}" && -n "$(ls -A "${dir}" 2>/dev/null)" ]]; then
-            echo "${dir}"
-            return 0
-        fi
-        legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${alt_iso}")"
-        if [[ -d "${legacy_dir}" && -n "$(ls -A "${legacy_dir}" 2>/dev/null)" ]]; then
-            echo "${legacy_dir}"
-            return 0
-        fi
-    fi
-
-    return 1
-}
-
-economist_format_dir_size_aligned() {
-    local dir="$1" bytes=0 num=0
+economist_dir_size_bytes() {
+    local dir="$1" bytes=""
 
     [[ -n "${dir}" && -d "${dir}" ]] || {
-        printf '%10s' '—'
+        echo "0"
         return 0
     }
 
     bytes="$(du -sb "${dir}" 2>/dev/null | awk '{print $1}')"
-    [[ "${bytes:-0}" =~ ^[0-9]+$ ]] || {
-        printf '%10s' '—'
-        return 0
-    }
-    (( bytes > 0 )) || {
-        printf '%10s' '—'
-        return 0
-    }
-
-    if (( bytes < 1048576 )); then
-        num=$(( (bytes + 1023) / 1024 ))
-        printf '%7d %2s' "${num}" "kB"
-    elif (( bytes < 1073741824 )); then
-        num=$(( (bytes + 524288) / 1048576 ))
-        printf '%7d %2s' "${num}" "MB"
-    else
-        num=$(( (bytes + 536870912) / 1073741824 ))
-        printf '%7d %2s' "${num}" "GB"
+    if [[ ! "${bytes:-0}" =~ ^[0-9]+$ ]] || (( bytes == 0 )); then
+        bytes="$(find "${dir}" -type f -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {print s+0}')"
     fi
+    if [[ ! "${bytes:-0}" =~ ^[0-9]+$ ]]; then
+        bytes="0"
+    fi
+    echo "${bytes}"
 }
 
-economist_format_edition_size() {
-    local iso="$1" alt_iso="${2:-}" dir=""
+economist_format_bytes_all_units() {
+    local bytes="$1" kb=0 mb=0 gb=0
 
-    if dir="$(economist_edition_processed_dir_for_iso "${iso}" "${alt_iso}" 2>/dev/null)"; then
-        economist_format_dir_size_aligned "${dir}"
-    else
-        printf '%10s' '—'
+    if [[ ! "${bytes:-0}" =~ ^[0-9]+$ ]] || (( bytes <= 0 )); then
+        printf '%42s' '—'
+        return 0
     fi
+
+    kb=$(( (bytes + 1023) / 1024 ))
+    mb=$(( (bytes + 524288) / 1048576 ))
+    gb=$(( (bytes + 536870912) / 1073741824 ))
+    printf '%12d B %8d kB %6d MB %4d GB' "${bytes}" "${kb}" "${mb}" "${gb}"
+}
+
+economist_show_available_edition_size() {
+    local iso="$1" sat_iso="$2" local_status="$3" cached_dir="${4:-}" dir="" bytes=0
+
+    if [[ "${local_status}" != "already processed" ]]; then
+        printf '%42s' '—'
+        return 0
+    fi
+
+    dir="${cached_dir}"
+    if [[ -z "${dir}" ]]; then
+        dir="$(economist_resolve_processed_edition_dir "${iso}" "${sat_iso}" 2>/dev/null || true)"
+    fi
+    [[ -n "${dir}" ]] || {
+        printf '%42s' '—'
+        return 0
+    }
+
+    bytes="$(economist_dir_size_bytes "${dir}")"
+    economist_format_bytes_all_units "${bytes}"
 }
 
 economist_show_available_print_editions() {
@@ -944,22 +969,27 @@ economist_show_available_print_editions() {
     local -n _local_ref="$3"
     local -n _issues_ref="$4"
     local -n _sat_isos_ref="$5"
+    local -n _dirs_ref="$6"
     local idx=0 pick_num=0
 
-    printf '  %3s %-12s %-36s %-18s %6s %11s %10s\n' \
+    printf '  %3s %-12s %-36s %-18s %6s %11s %42s\n' \
         "#" "Edition" "Title" "Local" "Issue" "Age" "Size"
-    printf '  %3s %-12s %-36s %-18s %6s %11s %10s\n' \
-        "---" "--------" "-----" "-----" "-----" "---------" "----------"
+    printf '  %3s %-12s %-36s %-18s %6s %11s %42s\n' \
+        "---" "--------" "-----" "-----" "-----" "---------" "------------------------------------------"
     for (( idx = 0; idx < ${#_isos_ref[@]}; ++idx )); do
         pick_num=$((${#_isos_ref[@]} - idx))
-        printf '  %3s %-12s %-36s %-18s %6s %11s %10s\n' \
+        printf '  %3s %-12s %-36s %-18s %6s %11s %42s\n' \
             "${pick_num}" \
             "${_isos_ref[idx]}" \
             "${_titles_ref[idx]:0:36}" \
             "${_local_ref[idx]:0:18}" \
             "${_issues_ref[idx]}" \
             "$(economist_format_age_from_today "${_isos_ref[idx]}")" \
-            "$(economist_format_edition_size "${_isos_ref[idx]}" "${_sat_isos_ref[idx]}")"
+            "$(economist_show_available_edition_size \
+                "${_isos_ref[idx]}" \
+                "${_sat_isos_ref[idx]}" \
+                "${_local_ref[idx]}" \
+                "${_dirs_ref[idx]}")"
         if (( pick_num % 10 == 0 )); then
             echo
         fi
@@ -977,6 +1007,7 @@ economist_show_and_pick_available_editions() {
     local -a pick_local=()
     local -a pick_issues=()
     local -a pick_sat_isos=()
+    local -a pick_dirs=()
 
     _picked_iso_ref=""
     _force_reprocess_ref=0
@@ -1027,12 +1058,17 @@ economist_show_and_pick_available_editions() {
         sat_iso="$(economist_edition_date_for_rss_position "${pos}")"
         local_status="$(economist_local_edition_status_for_iso "${edition_iso}" "${sat_iso}")"
         issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"
+        processed_dir=""
+        if [[ "${local_status}" == "already processed" ]]; then
+            processed_dir="$(economist_resolve_processed_edition_dir "${edition_iso}" "${sat_iso}" 2>/dev/null || true)"
+        fi
 
         pick_isos+=("${edition_iso}")
         pick_titles+=("${title}")
         pick_local+=("${local_status}")
         pick_issues+=("${issue_no}")
         pick_sat_isos+=("${sat_iso}")
+        pick_dirs+=("${processed_dir}")
         (( ++verified_count )) || true
     done
 
@@ -1044,25 +1080,27 @@ economist_show_and_pick_available_editions() {
     fi
 
     if [[ ${#pick_isos[@]} -gt 1 ]]; then
-        local -a _rev_isos=() _rev_titles=() _rev_local=() _rev_issues=() _rev_sat_isos=()
+        local -a _rev_isos=() _rev_titles=() _rev_local=() _rev_issues=() _rev_sat_isos=() _rev_dirs=()
         for (( idx = ${#pick_isos[@]} - 1; idx >= 0; --idx )); do
             _rev_isos+=("${pick_isos[idx]}")
             _rev_titles+=("${pick_titles[idx]}")
             _rev_local+=("${pick_local[idx]}")
             _rev_issues+=("${pick_issues[idx]}")
             _rev_sat_isos+=("${pick_sat_isos[idx]}")
+            _rev_dirs+=("${pick_dirs[idx]}")
         done
         pick_isos=("${_rev_isos[@]}")
         pick_titles=("${_rev_titles[@]}")
         pick_local=("${_rev_local[@]}")
         pick_issues=("${_rev_issues[@]}")
         pick_sat_isos=("${_rev_sat_isos[@]}")
+        pick_dirs=("${_rev_dirs[@]}")
     fi
 
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
         echo
         echo "Verified editions (oldest at top; #1 = newest at bottom):"
-        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues pick_sat_isos
+        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs
         echo
         echo "Non-interactive session — listing only (no pick)."
         return 0
@@ -1071,7 +1109,7 @@ economist_show_and_pick_available_editions() {
     while true; do
         echo
         echo "Verified editions (oldest at top; #1 = newest at bottom):"
-        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues pick_sat_isos
+        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs
         echo
 
         while true; do
@@ -1107,7 +1145,11 @@ economist_show_and_pick_available_editions() {
         printf '  %-12s %s\n' "Local:" "${pick_local[sel_idx]}"
         printf '  %-12s %s\n' "Age:" "$(economist_format_age_from_today "${pick_isos[sel_idx]}")"
         printf '  %-12s %s\n' "Size:" \
-            "$(economist_format_edition_size "${pick_isos[sel_idx]}" "${pick_sat_isos[sel_idx]}")"
+            "$(economist_show_available_edition_size \
+                "${pick_isos[sel_idx]}" \
+                "${pick_sat_isos[sel_idx]}" \
+                "${pick_local[sel_idx]}" \
+                "${pick_dirs[sel_idx]}")"
         echo
 
         if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
