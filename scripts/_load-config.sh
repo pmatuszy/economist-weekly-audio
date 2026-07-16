@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.29 - fix circular nameref when collecting config errors
 # 2026.07.16 - v. 2.28 - detailed config checks: dir write, ffmpeg run, file owner
 # 2026.07.16 - v. 2.27 - print config summary immediately before proceed prompt
 # 2026.07.16 - v. 2.26 - ECONOMIST_CONFIG_FILE; print config OK after validation
@@ -147,84 +148,79 @@ economist_config_is_blank() {
 }
 
 economist_config_add_error() {
-    local -n _errs=$1
-    local message="$2"
+    local err_arr="$1" message="$2"
 
+    local -n _errs="${err_arr}"
     _errs+=("${message}")
 }
 
 economist_config_require_non_blank() {
-    local -n _errs=$1
-    local name="$2" value="${3:-}"
+    local err_arr="$1" name="$2" value="${3:-}"
 
     if economist_config_is_blank "${value}"; then
-        economist_config_add_error _errs "${name} is not set or empty"
+        economist_config_add_error "${err_arr}" "${name} is not set or empty"
         return 1
     fi
     return 0
 }
 
 economist_config_require_abs_dir_path() {
-    local -n _errs=$1
-    local name="$2" value="${3:-}" parent
+    local err_arr="$1" name="$2" value="${3:-}" parent
 
-    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+    economist_config_require_non_blank "${err_arr}" "${name}" "${value}" || return 1
 
     if [[ "${value}" != /* ]]; then
-        economist_config_add_error _errs "${name} must be an absolute path (got: ${value})"
+        economist_config_add_error "${err_arr}" "${name} must be an absolute path (got: ${value})"
         return 1
     fi
 
     parent="$(dirname "${value}")"
     if [[ ! -d "${parent}" && ! -d "${value}" ]]; then
-        economist_config_add_error _errs "${name} parent directory does not exist: ${parent}"
+        economist_config_add_error "${err_arr}" "${name} parent directory does not exist: ${parent}"
         return 1
     fi
     return 0
 }
 
 economist_config_require_http_url() {
-    local -n _errs=$1
-    local name="$2" value="${3:-}"
+    local err_arr="$1" name="$2" value="${3:-}"
 
-    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+    economist_config_require_non_blank "${err_arr}" "${name}" "${value}" || return 1
 
     if [[ ! "${value}" =~ ^https?://[^[:space:]]+$ ]]; then
-        economist_config_add_error _errs "${name} must be an http(s) URL (got: ${value})"
+        economist_config_add_error "${err_arr}" "${name} must be an http(s) URL (got: ${value})"
         return 1
     fi
     return 0
 }
 
 economist_config_require_executable() {
-    local -n _errs=$1
-    local name="$2" value="${3:-}"
+    local err_arr="$1" name="$2" value="${3:-}"
 
-    economist_config_require_non_blank _errs "${name}" "${value}" || return 1
+    economist_config_require_non_blank "${err_arr}" "${name}" "${value}" || return 1
 
     if [[ ! -f "${value}" ]]; then
-        economist_config_add_error _errs "${name} file does not exist: ${value}"
+        economist_config_add_error "${err_arr}" "${name} file does not exist: ${value}"
         return 1
     fi
 
     if [[ ! -x "${value}" ]]; then
-        economist_config_add_error _errs "${name} is not executable: ${value}"
+        economist_config_add_error "${err_arr}" "${name} is not executable: ${value}"
         return 1
     fi
     return 0
 }
 
 economist_config_validate_dir_writable() {
-    local -n _errs=$1
-    local name="$2" dir="${3:-}" probe="" parent="" run_user
+    local err_arr="$1" name="$2" dir="${3:-}" probe="" parent="" run_user
 
     run_user="$(id -un 2>/dev/null || echo unknown)"
 
-    economist_config_require_abs_dir_path _errs "${name}" "${dir}" || return 1
+    economist_config_require_abs_dir_path "${err_arr}" "${name}" "${dir}" || return 1
 
     if [[ -e "${dir}" ]]; then
         if [[ ! -w "${dir}" ]]; then
-            economist_config_add_error _errs \
+            economist_config_add_error "${err_arr}" \
                 "${name} is not writable by ${run_user}: ${dir}"
         fi
     else
@@ -233,36 +229,35 @@ economist_config_validate_dir_writable() {
             parent="$(dirname "${parent}")"
         done
         if [[ -e "${parent}" && ! -w "${parent}" ]]; then
-            economist_config_add_error _errs \
+            economist_config_add_error "${err_arr}" \
                 "${name} does not exist and ${parent} is not writable by ${run_user}"
         fi
     fi
 
     probe="${dir}/.economist-write-test-$$"
     if ! mkdir -p "${probe}" 2>/dev/null; then
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "${name} — ${run_user} cannot create directories under: ${dir}"
         return 1
     fi
     if ! rmdir "${probe}" 2>/dev/null; then
         rm -rf "${probe}" 2>/dev/null || true
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "${name} — ${run_user} created a test directory but cannot remove it: ${probe}"
     fi
 }
 
 economist_config_validate_ffmpeg() {
-    local -n _errs=$1
-    local path="${2:-}" version_line="" rc=0 run_user
+    local err_arr="$1" path="${2:-}" version_line="" rc=0 run_user
 
     run_user="$(id -un 2>/dev/null || echo unknown)"
     ECONOMIST_FFMPEG_VERSION=""
 
-    economist_config_require_executable _errs "FFMPEG_PATH" "${path}" || return 1
+    economist_config_require_executable "${err_arr}" "FFMPEG_PATH" "${path}" || return 1
 
     version_line="$("${path}" -hide_banner -version 2>&1 | head -n1)" || rc=$?
     if (( rc != 0 )) || economist_config_is_blank "${version_line}"; then
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "FFMPEG_PATH cannot be executed by ${run_user}: ${path} (exit ${rc})"
         return 1
     fi
@@ -271,8 +266,7 @@ economist_config_validate_ffmpeg() {
 }
 
 economist_config_validate_file_owner() {
-    local -n _errs=$1
-    local owner="${2:-}" user group run_uid
+    local err_arr="$1" owner="${2:-}" user group run_uid
 
     run_uid="$(id -u 2>/dev/null || echo 0)"
 
@@ -281,7 +275,7 @@ economist_config_validate_file_owner() {
     fi
 
     if [[ ! "${owner}" =~ ^[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?$ ]]; then
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "ECONOMIST_FILE_OWNER must be user or user:group (got: ${owner})"
         return 1
     fi
@@ -290,20 +284,20 @@ economist_config_validate_file_owner() {
         user="${owner%%:*}"
         group="${owner#*:}"
         if [[ -n "${user}" ]] && ! getent passwd "${user}" >/dev/null 2>&1; then
-            economist_config_add_error _errs \
+            economist_config_add_error "${err_arr}" \
                 "ECONOMIST_FILE_OWNER user does not exist: ${user}"
         fi
         if [[ -n "${group}" ]] && ! getent group "${group}" >/dev/null 2>&1; then
-            economist_config_add_error _errs \
+            economist_config_add_error "${err_arr}" \
                 "ECONOMIST_FILE_OWNER group does not exist: ${group}"
         fi
     elif ! getent passwd "${owner}" >/dev/null 2>&1; then
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "ECONOMIST_FILE_OWNER user does not exist: ${owner}"
     fi
 
     if (( run_uid != 0 )); then
-        economist_config_add_error _errs \
+        economist_config_add_error "${err_arr}" \
             "ECONOMIST_FILE_OWNER is set to ${owner} but pipeline runs as $(id -un 2>/dev/null) (uid ${run_uid}); chown requires root"
     fi
 }
