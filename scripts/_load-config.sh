@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.21 - verify edition on RSS server; proceed prompt before download
 # 2026.07.16 - v. 2.20 - summary on show-available quit; result label for no selection
 # 2026.07.16 - v. 2.19 - confirm prompt reads one character like install.sh
 # 2026.07.16 - v. 2.18 - fix pick loop for bash without labeled continue
@@ -301,6 +302,77 @@ economist_read_tty_char() {
     _char_ref="${_char_ref//$'\r'/}"
 }
 
+economist_edition_iso_from_weekly_url() {
+    local url="$1"
+
+    [[ "${url}" =~ /weeklyedition/([0-9]{4}-[0-9]{2}-[0-9]{2}) ]] || return 1
+    echo "${BASH_REMATCH[1]}"
+}
+
+economist_verify_edition_date_on_server() {
+    local iso="$1" rss_file="" pos=0 item_count=0 url="" edition_at_pos=""
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+
+    rss_file="$(mktemp)"
+    trap 'rm -f "${rss_file}"' RETURN
+
+    economist_rss_fetch_to "${rss_file}" || return 1
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    (( item_count > 0 )) || return 1
+
+    for (( pos = 1; pos <= item_count; ++pos )); do
+        edition_at_pos="$(economist_edition_date_for_rss_position "${pos}")" || continue
+        [[ "${edition_at_pos}" == "${iso}" ]] || continue
+        url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+        [[ -n "${url}" ]] || return 1
+        economist_verify_enclosure_on_server "${url}"
+        return $?
+    done
+
+    return 1
+}
+
+economist_prompt_proceed_before_download() {
+    local iso="$1" issue_available="$2" issue_no="" answer=""
+
+    if [[ ! -t 0 && ! -r /dev/tty ]]; then
+        (( issue_available )) || return 1
+        return 0
+    fi
+
+    issue_no="$(economist_issue_number_for_edition_date "${iso}" 2>/dev/null || echo "—")"
+
+    if (( issue_available )); then
+        echo
+        echo "New edition verified on the RSS server (issue ${issue_no})."
+        economist_read_tty_char "Proceed with download? [Y/n/q] (10s): " answer 10
+        case "${answer}" in
+            n|N|q|Q)
+                return 1
+                ;;
+            ''|y|Y)
+                return 0
+                ;;
+            *)
+                return 0
+                ;;
+        esac
+    fi
+
+    echo
+    echo "Edition ${iso} is not verified on the RSS server yet (issue ${issue_no})."
+    economist_read_tty_char "Proceed anyway? [y/N/q] (10s): " answer 10
+    case "${answer}" in
+        y|Y)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 economist_force_reprocess_edition() {
     local edition_dir="$1" work_dir="$2"
 
@@ -585,6 +657,7 @@ economist_format_step_name() {
         already_exists) echo "skipped (edition already exists)" ;;
         show_available) echo "show available editions" ;;
         show_available_quit) echo "quit (no edition selected)" ;;
+        pipeline_confirm_quit) echo "quit before download" ;;
         "") echo "unknown" ;;
         *) echo "${step}" ;;
     esac
@@ -622,6 +695,8 @@ economist_summary_result() {
         echo "interrupted (Ctrl-C)"
     elif [[ "${ECONOMIST_RUN_STEP}" == "show_available_quit" ]]; then
         echo "quit (no edition selected)"
+    elif [[ "${ECONOMIST_RUN_STEP}" == "pipeline_confirm_quit" ]]; then
+        echo "quit before download"
     elif (( ECONOMIST_RUN_EXIT_CODE == 0 )); then
         echo "success"
     else
@@ -777,6 +852,8 @@ economist_print_summary() {
     if [[ "${ECONOMIST_RUN_MODE}" == pipeline ]]; then
         if [[ "${ECONOMIST_RUN_STEP}" == "show_available_quit" ]]; then
             economist_summary_line "Run:" "show-available (no edition selected)"
+        elif [[ "${ECONOMIST_RUN_STEP}" == "pipeline_confirm_quit" ]]; then
+            economist_summary_line "Run:" "quit before download"
         else
             economist_summary_line "Run:" "all steps (download → move)"
         fi

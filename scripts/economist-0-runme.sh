@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.16 - RSS verify + proceed prompt before download (10s, Y default)
 # 2026.07.16 - v. 1.15 - print summary when user quits show-available without picking
 # 2026.07.16 - v. 1.14 - show-available confirm pick; force reprocess when confirmed
 # 2026.07.15 - v. 1.13 - --show-available lists verified RSS editions and interactive pick
@@ -127,6 +128,7 @@ if (( SHOW_AVAILABLE )); then
     fi
     edition_date_args=("${picked_edition}")
     ECONOMIST_FORCE_REPROCESS="${force_reprocess}"
+    ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT=1
 fi
 
 ########################################################################
@@ -256,6 +258,32 @@ mkdir -p "${edition_directory}" 2>/dev/null
 cd "${edition_directory}"
 
 log_kv "Current working directory:" "$(pwd)"
+
+edition_iso=""
+issue_available=0
+if edition_iso="$(economist_edition_iso_from_weekly_url "${latest_edition}" 2>/dev/null)"; then
+    if economist_verify_edition_date_on_server "${edition_iso}"; then
+        issue_available=1
+        log_kv "RSS/server check:" "available (issue $(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—"))"
+    else
+        log_kv "RSS/server check:" "not verified yet"
+    fi
+else
+    log_kv "RSS/server check:" "skipped (no edition date)"
+fi
+
+if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
+    if ! economist_prompt_proceed_before_download "${edition_iso:-unknown}" "${issue_available}"; then
+        if [[ ! -t 0 && ! -r /dev/tty ]] && (( ! issue_available )); then
+            echo "Edition not verified on RSS server — exiting (non-interactive)."
+        else
+            echo "Download cancelled."
+        fi
+        economist_set_run_step pipeline_confirm_quit
+        economist_cleanup_pipeline_artifacts "${work_dir}" "${edition_directory}" "${output_dir}" "${edition_name}"
+        economist_exit_pipeline 0
+    fi
+fi
 
 log_part1="$(run_pipeline_child download "${SCRIPT_DIR}/economist-1-download.sh" "${args[@]}")"
 exit_code=$?
