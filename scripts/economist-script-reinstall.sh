@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.5 - interactive discard of dirty clone; align with -y behavior
 # 2026.07.16 - v. 1.4 - do not chmod repo clone (keeps git pull clean)
 # 2026.07.16 - v. 1.3 - discard local scripts/ edits before git pull (-y)
 # 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (drop wrapper)
@@ -132,7 +133,7 @@ setup_git_ssh() {
 }
 
 economist_git_prepare_pull() {
-    local dir="$1" assume_yes="${2:-0}" dirty=""
+    local dir="$1" assume_yes="${2:-0}" dirty="" answer=""
 
     [[ -d "${dir}/.git" ]] || return 0
 
@@ -141,16 +142,41 @@ economist_git_prepare_pull() {
 
     if (( assume_yes )); then
         echo "Note: discarding local changes under scripts/ and install.sh before git pull."
-        echo "      Edit /root/bin/ or push changes from your dev machine — not the server clone."
+        echo "      Edit /root/bin/ or push changes from your dev machine - not the server clone."
         git -C "${dir}" checkout -- scripts/ install.sh 2>/dev/null || true
         return 0
     fi
 
-    echo "Local changes would block git pull in ${dir}:" >&2
-    git -C "${dir}" status --short -- scripts/ install.sh >&2
-    echo "Fix: git -C \"${dir}\" checkout -- scripts/ install.sh" >&2
-    echo "Or:  economist-script-reinstall.sh -y  (auto-discards script changes)" >&2
-    return 1
+    if [[ ! -t 0 && ! -r /dev/tty ]]; then
+        echo "Local changes would block git pull in ${dir}:" >&2
+        git -C "${dir}" status --short -- scripts/ install.sh >&2
+        echo "Run: economist-script-reinstall.sh -y" >&2
+        return 1
+    fi
+
+    echo
+    echo "Local changes in ${dir} would block git pull:"
+    git -C "${dir}" status --short -- scripts/ install.sh
+    echo "The server clone should match GitHub (edit /root/bin/, not the repo clone)."
+    economist_read_tty_char "Discard local script changes and pull? [Y/n/q]: " answer 300
+    case "${answer}" in
+        n|N)
+            echo "Cancelled - fix the clone or run with -y."
+            return 1
+            ;;
+        q|Q)
+            echo "Quit."
+            exit 0
+            ;;
+        ''|y|Y)
+            git -C "${dir}" checkout -- scripts/ install.sh 2>/dev/null || true
+            return 0
+            ;;
+        *)
+            git -C "${dir}" checkout -- scripts/ install.sh 2>/dev/null || true
+            return 0
+            ;;
+    esac
 }
 
 sync_repo() {

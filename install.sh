@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.36 - --yes keeps installed config; N/q on config prompt continue install
 # 2026.07.15 - v. 1.35 - cleanup cron uses economist-cleanup-empty-dirs.sh (safe paths)
 # 2026.07.15 - v. 1.34 - archive cron uses economist-archive-editions.sh (replace on collision)
 # 2026.07.15 - v. 1.33 - crontab var ECONOMIST_RUN renamed to ECONOMIST_MAIN_SCRIPT
@@ -662,26 +663,31 @@ install_config_file() {
         check_config_permissions "${CONF_FILE}"
 
         if [[ -f "${PRIVATE_CONF}" ]]; then
-            print_config_replace_offer
-            read_yes_no_quit "Replace installed config with private repo copy? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
-            case "${REPLY}" in
-                y)
-                    check_config_permissions "${PRIVATE_CONF}"
-                    cp "${PRIVATE_CONF}" "${CONF_FILE}"
-                    chmod 600 "${CONF_FILE}"
-                    echo "Replaced config:"
-                    print_aligned_config_path "current" "${CONF_FILE}"
-                    check_config_permissions "${CONF_FILE}"
-                    ;;
-                q)
-                    echo "Quit."
-                    exit 0
-                    ;;
-                *)
-                    echo "Kept existing config:"
-                    print_aligned_config_path "current" "${CONF_FILE}"
-                    ;;
-            esac
+            if (( ASSUME_YES )); then
+                echo "Keeping installed config (--yes)."
+                print_aligned_config_path "current" "${CONF_FILE}"
+            else
+                print_config_replace_offer
+                read_yes_no_quit "Replace installed config with private repo copy? [y/N/q]: " "${CONFIG_REPLACE_TIMEOUT}" 0
+                case "${REPLY}" in
+                    y)
+                        check_config_permissions "${PRIVATE_CONF}"
+                        cp "${PRIVATE_CONF}" "${CONF_FILE}"
+                        chmod 600 "${CONF_FILE}"
+                        echo "Replaced config:"
+                        print_aligned_config_path "current" "${CONF_FILE}"
+                        check_config_permissions "${CONF_FILE}"
+                        ;;
+                    q)
+                        echo "Keeping existing config (continuing install)."
+                        print_aligned_config_path "current" "${CONF_FILE}"
+                        ;;
+                    *)
+                        echo "Kept existing config:"
+                        print_aligned_config_path "current" "${CONF_FILE}"
+                        ;;
+                esac
+            fi
         fi
         return
     fi
