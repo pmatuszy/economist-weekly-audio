@@ -1,4 +1,5 @@
 #!/bin/bash
+# 2026.07.16 - v. 2.8 - edition folder YYYYMMDD_TheEconomist (no dots in dir name)
 # 2026.07.15 - v. 2.7 - archive unprocessed chapter MP3s before speedup step
 # 2026.07.15 - v. 2.6 - rename chapter start/end vars; strip CR; harden set -u parsing
 # 2026.07.15 - v. 2.5 - ignore global ffmetadata title; fix unbound start/end under set -u
@@ -149,7 +150,7 @@ mv economist.mp3 "TheEconomist_${formatted_date}.mp3"
 echo "Original file renamed to: TheEconomist_${formatted_date}.mp3"
 
 echo "Creating directory for output files..."
-output_dir="${formatted_date}_TheEconomist"
+output_dir="${album_date}_TheEconomist"
 
 mkdir -p "$output_dir"
 mv TheEconomist_${formatted_date}.mp3 "$output_dir"

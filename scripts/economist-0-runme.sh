@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.20 - edition output dirs use YYYYMMDD_TheEconomist (no dots)
 # 2026.07.16 - v. 1.19 - startup cleanup of leftovers from failed previous run
 # 2026.07.16 - v. 1.18 - drop website archive line on download; clarify on quit only
 # 2026.07.16 - v. 1.17 - quit when no new RSS edition; proceed prompt only if new
@@ -268,7 +269,7 @@ args=("${resolved_edition_iso}")
 
 log_kv "RSS edition to download:" "${latest_edition}"
 
-edition_directory="${output_dir}/$(echo "${latest_edition}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
+edition_directory="$(economist_edition_output_dir_for_date "${resolved_edition_iso}")"
 edition_name="$(basename "${edition_directory}")"
 log_kv "Edition output directory:" "${edition_directory}"
 
@@ -276,14 +277,15 @@ ECONOMIST_PIPELINE_EDITION_URL="${latest_edition}"
 ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
 ECONOMIST_PIPELINE_EDITION_NAME="${edition_name}"
 
-if [[ -d "${edition_directory}" && $(/bin/ls -A "${edition_directory}") ]]; then
+status_dir="$(economist_edition_output_dir_for_status "${resolved_edition_iso}")"
+if [[ "$(economist_local_edition_status "${status_dir}")" == "already processed" ]]; then
     if [[ "${ECONOMIST_FORCE_REPROCESS:-0}" == 1 ]]; then
         echo "Force reprocess — removing existing edition output and work files..."
-        economist_force_reprocess_edition "${edition_directory}" "${work_dir}"
+        economist_force_reprocess_edition "${status_dir}" "${work_dir}"
     else
         log_part1=$(
             echo
-            echo "Directory ${edition_directory} exists and is not empty"
+            echo "Directory ${status_dir} exists and is not empty"
             echo "Will not download this edition again..."
             echo "... exiting."
         )

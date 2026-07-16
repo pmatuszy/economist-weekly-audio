@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.24 - edition dirs YYYYMMDD_TheEconomist (legacy dotted names still recognized)
 # 2026.07.16 - v. 2.23 - startup cleanup of stale work/output leftovers
 # 2026.07.16 - v. 2.22 - check RSS for new edition before proceed; quit if none
 # 2026.07.16 - v. 2.21 - verify edition on RSS server; proceed prompt before download
@@ -160,12 +161,51 @@ economist_edition_date_for_rss_position() {
     date -d "${latest_sat} - $((pos - 1)) weeks" +%F
 }
 
-economist_edition_output_dir_for_date() {
+economist_edition_dir_basename_for_date() {
     local iso="$1" y m d
 
     [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
     IFS='-' read -r y m d <<< "${iso}"
-    echo "${ECONOMIST_OUTPUT_DIR}/${y}.${m}.${d}_TheEconomist"
+    echo "${y}${m}${d}_TheEconomist"
+}
+
+economist_legacy_edition_dir_basename_for_date() {
+    local iso="$1" y m d
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    IFS='-' read -r y m d <<< "${iso}"
+    echo "${y}.${m}.${d}_TheEconomist"
+}
+
+economist_edition_output_dir_for_date() {
+    local iso="$1" base=""
+
+    base="$(economist_edition_dir_basename_for_date "${iso}")" || return 1
+    echo "${ECONOMIST_OUTPUT_DIR}/${base}"
+}
+
+economist_edition_output_dir_for_status() {
+    local iso="$1" new="" legacy=""
+
+    new="$(economist_edition_output_dir_for_date "${iso}")" || return 1
+    if [[ -d "${new}" ]] && [[ -n "$(ls -A "${new}" 2>/dev/null)" ]]; then
+        echo "${new}"
+        return 0
+    fi
+
+    legacy="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${iso}")"
+    if [[ -d "${legacy}" ]] && [[ -n "$(ls -A "${legacy}" 2>/dev/null)" ]]; then
+        echo "${legacy}"
+        return 0
+    fi
+
+    if [[ -d "${new}" ]]; then
+        echo "${new}"
+    elif [[ -d "${legacy}" ]]; then
+        echo "${legacy}"
+    else
+        echo "${new}"
+    fi
 }
 
 economist_issue_number_for_edition_date() {
@@ -380,7 +420,7 @@ economist_check_new_edition_for_run() {
         fi
     fi
 
-    edition_dir="$(economist_edition_output_dir_for_date "${_resolved_iso_ref}")"
+    edition_dir="$(economist_edition_output_dir_for_status "${_resolved_iso_ref}")"
     status="$(economist_local_edition_status "${edition_dir}")"
     issue_no="$(economist_issue_number_for_edition_date "${_resolved_iso_ref}" 2>/dev/null || echo "—")"
 
@@ -481,7 +521,7 @@ economist_show_and_pick_available_editions() {
 
         edition_iso="$(economist_edition_date_for_rss_position "${pos}")" || continue
         title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
-        edition_dir="$(economist_edition_output_dir_for_date "${edition_iso}")"
+        edition_dir="$(economist_edition_output_dir_for_status "${edition_iso}")"
         local_status="$(economist_local_edition_status "${edition_dir}")"
         issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"
 
