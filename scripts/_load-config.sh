@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.230401 - show-available: blank line every 10th pick number
 # v. 20260716.230001 - show-available table: right-align # and age columns
 # v. 20260716.225703 - show-available: oldest at top, #1 = newest at bottom
 # v. 20260716.225602 - show-available pick: Q quits immediately (no Enter)
@@ -764,6 +765,30 @@ economist_format_age_from_today() {
     printf '%2sy %2sm %2sd' "${cy}" "${cm}" "${cd}"
 }
 
+economist_show_available_print_editions() {
+    local -n _isos_ref="$1"
+    local -n _titles_ref="$2"
+    local -n _local_ref="$3"
+    local -n _issues_ref="$4"
+    local idx=0 pick_num=0
+
+    printf '  %3s %-12s %-36s %-18s %6s %11s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
+    printf '  %3s %-12s %-36s %-18s %6s %11s\n' "---" "--------" "-----" "-----" "-----" "---------"
+    for (( idx = 0; idx < ${#_isos_ref[@]}; ++idx )); do
+        pick_num=$((${#_isos_ref[@]} - idx))
+        printf '  %3s %-12s %-36s %-18s %6s %11s\n' \
+            "${pick_num}" \
+            "${_isos_ref[idx]}" \
+            "${_titles_ref[idx]:0:36}" \
+            "${_local_ref[idx]:0:18}" \
+            "${_issues_ref[idx]}" \
+            "$(economist_format_age_from_today "${_isos_ref[idx]}")"
+        if (( pick_num % 10 == 0 )); then
+            echo
+        fi
+    done
+}
+
 economist_show_and_pick_available_editions() {
     local -n _picked_iso_ref="$1"
     local -n _force_reprocess_ref="$2"
@@ -856,17 +881,7 @@ economist_show_and_pick_available_editions() {
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
         echo
         echo "Verified editions (oldest at top; #1 = newest at bottom):"
-        printf '  %3s %-12s %-36s %-18s %6s %11s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
-        printf '  %3s %-12s %-36s %-18s %6s %11s\n' "---" "--------" "-----" "-----" "-----" "---------"
-        for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
-            printf '  %3s %-12s %-36s %-18s %6s %11s\n' \
-                "$(( ${#pick_isos[@]} - idx ))" \
-                "${pick_isos[idx]}" \
-                "${pick_titles[idx]:0:36}" \
-                "${pick_local[idx]:0:18}" \
-                "${pick_issues[idx]}" \
-                "$(economist_format_age_from_today "${pick_isos[idx]}")"
-        done
+        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues
         echo
         echo "Non-interactive session — listing only (no pick)."
         return 0
@@ -875,17 +890,7 @@ economist_show_and_pick_available_editions() {
     while true; do
         echo
         echo "Verified editions (oldest at top; #1 = newest at bottom):"
-        printf '  %3s %-12s %-36s %-18s %6s %11s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
-        printf '  %3s %-12s %-36s %-18s %6s %11s\n' "---" "--------" "-----" "-----" "-----" "---------"
-        for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
-            printf '  %3s %-12s %-36s %-18s %6s %11s\n' \
-                "$(( ${#pick_isos[@]} - idx ))" \
-                "${pick_isos[idx]}" \
-                "${pick_titles[idx]:0:36}" \
-                "${pick_local[idx]:0:18}" \
-                "${pick_issues[idx]}" \
-                "$(economist_format_age_from_today "${pick_isos[idx]}")"
-        done
+        economist_show_available_print_editions pick_isos pick_titles pick_local pick_issues
         echo
 
         while true; do
