@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.225501 - show-available: newest is #1; add age column (y/m/d)
 # v. 20260716.162602 - shared config loader, validation, RSS helpers, run summary
 # Shared library: config, header lookup, Ctrl-C cleanup, and run summary.
 
@@ -677,6 +678,47 @@ economist_force_reprocess_edition() {
     economist_cleanup_work_dir "${work_dir}" 1
 }
 
+economist_format_age_from_today() {
+    local iso="$1" ty=0 tm=0 td=0 ey=0 em=0 ed=0 cy=0 cm=0 cd=0 dim=0
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || {
+        echo "—"
+        return 0
+    }
+    if [[ "$(date -d "${iso}" +%F 2>/dev/null || true)" != "${iso}" ]]; then
+        echo "—"
+        return 0
+    fi
+
+    ty=$(date +%Y)
+    tm=$(date +%-m)
+    td=$(date +%-d)
+    ey=$((10#${iso:0:4}))
+    em=$((10#${iso:5:2}))
+    ed=$((10#${iso:8:2}))
+
+    cy=$((ty - ey))
+    cm=$((tm - em))
+    cd=$((td - ed))
+
+    if (( cd < 0 )); then
+        cm=$((cm - 1))
+        dim="$(date -d "${ty}-$(printf '%02d' "${tm}")-01 - 1 day" +%-d 2>/dev/null || echo 28)"
+        cd=$((cd + dim))
+    fi
+    if (( cm < 0 )); then
+        cy=$((cy - 1))
+        cm=$((cm + 12))
+    fi
+
+    if (( cy < 0 || (cy == 0 && cm < 0) || (cy == 0 && cm == 0 && cd < 0) )); then
+        echo "0y 0m 0d"
+        return 0
+    fi
+
+    printf '%sy %sm %sd' "${cy}" "${cm}" "${cd}"
+}
+
 economist_show_and_pick_available_editions() {
     local -n _picked_iso_ref="$1"
     local -n _force_reprocess_ref="$2"
@@ -752,32 +794,19 @@ economist_show_and_pick_available_editions() {
         return 1
     fi
 
-    if [[ ${#pick_isos[@]} -gt 1 ]]; then
-        local -a _rev_isos=() _rev_titles=() _rev_local=() _rev_issues=()
-        for (( idx = ${#pick_isos[@]} - 1; idx >= 0; --idx )); do
-            _rev_isos+=("${pick_isos[idx]}")
-            _rev_titles+=("${pick_titles[idx]}")
-            _rev_local+=("${pick_local[idx]}")
-            _rev_issues+=("${pick_issues[idx]}")
-        done
-        pick_isos=("${_rev_isos[@]}")
-        pick_titles=("${_rev_titles[@]}")
-        pick_local=("${_rev_local[@]}")
-        pick_issues=("${_rev_issues[@]}")
-    fi
-
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
         echo
-        echo "Verified editions (oldest at top, newest at bottom):"
-        printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
-        printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
+        echo "Verified editions (#1 = newest):"
+        printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
+        printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "---" "--------" "-----" "-----" "-----" "---------"
         for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
-            printf '  %-3s %-12s %-36s %-18s %s\n' \
+            printf '  %-3s %-12s %-36s %-18s %-6s %s\n' \
                 "$((idx + 1))" \
                 "${pick_isos[idx]}" \
                 "${pick_titles[idx]:0:36}" \
                 "${pick_local[idx]:0:18}" \
-                "${pick_issues[idx]}"
+                "${pick_issues[idx]}" \
+                "$(economist_format_age_from_today "${pick_isos[idx]}")"
         done
         echo
         echo "Non-interactive session — listing only (no pick)."
@@ -786,21 +815,22 @@ economist_show_and_pick_available_editions() {
 
     while true; do
         echo
-        echo "Verified editions (oldest at top, newest at bottom):"
-        printf '  %-3s %-12s %-36s %-18s %s\n' "#" "Edition" "Title" "Local" "Issue"
-        printf '  %-3s %-12s %-36s %-18s %s\n' "---" "--------" "-----" "-----" "-----"
+        echo "Verified editions (#1 = newest):"
+        printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "#" "Edition" "Title" "Local" "Issue" "Age"
+        printf '  %-3s %-12s %-36s %-18s %-6s %s\n' "---" "--------" "-----" "-----" "-----" "---------"
         for (( idx = 0; idx < ${#pick_isos[@]}; ++idx )); do
-            printf '  %-3s %-12s %-36s %-18s %s\n' \
+            printf '  %-3s %-12s %-36s %-18s %-6s %s\n' \
                 "$((idx + 1))" \
                 "${pick_isos[idx]}" \
                 "${pick_titles[idx]:0:36}" \
                 "${pick_local[idx]:0:18}" \
-                "${pick_issues[idx]}"
+                "${pick_issues[idx]}" \
+                "$(economist_format_age_from_today "${pick_isos[idx]}")"
         done
         echo
 
         while true; do
-            economist_read_tty_line "To download: enter 1–${#pick_isos[@]} and press Enter, or Enter/Q to quit: " choice
+            economist_read_tty_line "To download: enter 1–${#pick_isos[@]} (1 = newest) and press Enter, or Enter/Q to quit: " choice
 
             case "${choice}" in
                 q|Q|'')
@@ -825,6 +855,7 @@ economist_show_and_pick_available_editions() {
         printf '  %-12s %s\n' "Title:" "${pick_titles[sel_idx]}"
         printf '  %-12s %s\n' "Issue:" "${pick_issues[sel_idx]}"
         printf '  %-12s %s\n' "Local:" "${pick_local[sel_idx]}"
+        printf '  %-12s %s\n' "Age:" "$(economist_format_age_from_today "${pick_isos[sel_idx]}")"
         echo
 
         if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
