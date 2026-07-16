@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260716.230201 - align v. prefix in Was/Now install columns
 # v. 20260716.162701 - install scripts into bin/conf; parse timestamp versions
 # Copies economist-N-*.sh scripts into bin/; child scripts run from same directory.
 # Single-key prompts [y/N/q] with 300s timeout; default is no.
@@ -128,10 +129,12 @@ LOCAL_CONF="${REPO_ROOT}/economist.local.conf"
 CONFIG_PATH_LABEL_WIDTH=8
 CONFIG_PATH_TEXT_COL=12
 SCRIPT_INSTALL_NAME_WIDTH=34
-SCRIPT_INSTALL_VER_WIDTH=22
+SCRIPT_INSTALL_VER_BODY_WIDTH=17
+SCRIPT_INSTALL_VER_COL_WIDTH=20
+SCRIPT_INSTALL_MARKER_WIDTH=4
 
 # Parse the newest version from script header comments (first 40 lines).
-# Current format:  # v. YYYYMMDD.HH24MISS - change description
+# Current format:  # v. YYYYMMDD.HHMMSS - change description
 # Legacy formats:  # YYYY.MM.DD - v. N.N - ...  or  # v. N.N - YYYY.MM.DD - ...
 economist_parse_script_version() {
     local file="$1" line="" ver="" date="" line_no=0
@@ -167,7 +170,7 @@ economist_parse_script_version() {
     echo "unknown|"
 }
 
-economist_format_script_version() {
+economist_script_version_body() {
     local parsed="$1" ver="" date=""
 
     ver="${parsed%%|*}"
@@ -175,21 +178,47 @@ economist_format_script_version() {
 
     case "${ver}" in
         missing)
-            printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "not installed"
+            echo "not installed"
             ;;
         unknown)
-            printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "unknown"
+            echo "unknown"
             ;;
         *)
             if [[ "${ver}" =~ ^[0-9]{8}\.[0-9]{6}$ ]]; then
-                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver}"
+                echo "${ver}"
             elif [[ -n "${date}" ]]; then
-                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver} (${date})"
+                echo "${ver} (${date})"
             else
-                printf '%-*s' "${SCRIPT_INSTALL_VER_WIDTH}" "v. ${ver}"
+                echo "${ver}"
             fi
             ;;
     esac
+}
+
+economist_print_script_version_cell() {
+    local parsed="$1" ver="" body=""
+
+    ver="${parsed%%|*}"
+    body="$(economist_script_version_body "${parsed}")"
+
+    case "${ver}" in
+        missing|unknown)
+            printf '%-*s' "${SCRIPT_INSTALL_VER_COL_WIDTH}" "${body}"
+            ;;
+        *)
+            printf 'v. %-*s' "${SCRIPT_INSTALL_VER_BODY_WIDTH}" "${body}"
+            ;;
+    esac
+}
+
+economist_print_script_install_marker() {
+    local marker="$1"
+
+    printf '%*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+}
+
+economist_format_script_version() {
+    economist_print_script_version_cell "$1"
 }
 
 economist_script_install_marker() {
@@ -215,12 +244,11 @@ print_script_version_row() {
     new_parsed="$(economist_parse_script_version "${repo_file}")"
     marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
 
-    printf '  %-*s %s %s %s ' \
+    printf '  %-*s %s %s %s\n' \
         "${SCRIPT_INSTALL_NAME_WIDTH}" "${name}" \
-        "$(economist_format_script_version "${current_parsed}")" \
-        "${marker}" \
-        "$(economist_format_script_version "${new_parsed}")"
-    echo
+        "$(economist_print_script_version_cell "${current_parsed}")" \
+        "$(economist_print_script_install_marker "${marker}")" \
+        "$(economist_print_script_version_cell "${new_parsed}")"
 }
 
 print_scripts_install_plan() {
@@ -229,10 +257,11 @@ print_scripts_install_plan() {
     echo "Install into:"
     printf "  %s/\n" "${BIN_DIR}"
     echo
-    printf '  %-*s %-*s    %s\n' \
+    printf '  %-*s %-*s %*s %-*s\n' \
         "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
-        "${SCRIPT_INSTALL_VER_WIDTH}" "Installed" \
-        "Repository"
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Installed" \
+        "${SCRIPT_INSTALL_MARKER_WIDTH}" "" \
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Repository"
     printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
     for script_path in "${SCRIPT_PATHS[@]}"; do
         name="$(basename "${script_path}")"
@@ -703,10 +732,11 @@ install_bin_scripts() {
     print_section "Installing scripts"
     mkdir -p "${BIN_DIR}"
 
-    printf '  %-*s %-*s    %s\n' \
+    printf '  %-*s %-*s %*s %-*s\n' \
         "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
-        "${SCRIPT_INSTALL_VER_WIDTH}" "Was" \
-        "Now"
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Was" \
+        "${SCRIPT_INSTALL_MARKER_WIDTH}" "" \
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Now"
     printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
 
     for script_path in "${SCRIPT_PATHS[@]}"; do
@@ -717,12 +747,11 @@ install_bin_scripts() {
         marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
         cp "${script_path}" "${target}"
         chmod 755 "${target}"
-        printf '  %-*s %s %s %s ' \
+        printf '  %-*s %s %s %s\n' \
             "${SCRIPT_INSTALL_NAME_WIDTH}" "${name}" \
-            "$(economist_format_script_version "${current_parsed}")" \
-            "${marker}" \
-            "$(economist_format_script_version "${new_parsed}")"
-        echo
+            "$(economist_print_script_version_cell "${current_parsed}")" \
+            "$(economist_print_script_install_marker "${marker}")" \
+            "$(economist_print_script_version_cell "${new_parsed}")"
     done
 
     current_parsed="$(economist_parse_script_version "${BIN_DIR}/_load-config.sh")"
@@ -730,12 +759,11 @@ install_bin_scripts() {
     marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
     cp "${SCRIPTS_DIR}/_load-config.sh" "${BIN_DIR}/_load-config.sh"
     chmod 755 "${BIN_DIR}/_load-config.sh"
-    printf '  %-*s %s %s %s ' \
+    printf '  %-*s %s %s %s\n' \
         "${SCRIPT_INSTALL_NAME_WIDTH}" "_load-config.sh" \
-        "$(economist_format_script_version "${current_parsed}")" \
-        "${marker}" \
-        "$(economist_format_script_version "${new_parsed}")"
-    echo
+        "$(economist_print_script_version_cell "${current_parsed}")" \
+        "$(economist_print_script_install_marker "${marker}")" \
+        "$(economist_print_script_version_cell "${new_parsed}")"
     rm -f "${BIN_DIR}/_economist-run-control.sh" "${BIN_DIR}/_economist-script-header.sh"
     echo
 }
