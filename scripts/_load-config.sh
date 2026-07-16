@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# v. 20260716.231500 - edition date from RSS title cover date (e.g. JULY 18TH 2026 -> 2026-07-18)
+# v. 20260716.231501 - fix RSS title cover date parse (EDITION uppercase); status dir aliases
+# v. 20260716.231401 - parse cover date from RSS title (case-insensitive); status alias dirs
 # v. 20260716.230401 - show-available: blank line every 10th pick number
 # v. 20260716.230001 - show-available table: right-align # and age columns
 # v. 20260716.225703 - show-available: oldest at top, #1 = newest at bottom
@@ -379,21 +380,26 @@ economist_edition_date_for_rss_position() {
 }
 
 economist_edition_date_from_rss_title() {
-    local title="$1" month="" day="" year="" iso=""
+    local title="$1" title_norm="" month="" day="" year="" iso=""
 
     [[ -n "${title}" && "${title}" != "—" ]] || return 1
+    title_norm="${title,,}"
 
-    if [[ "${title}" =~ [Ee]dition:[[:space:]]+([A-Za-z]+)[[:space:]]+([0-9]{1,2})[A-Za-z]*[[:space:]]+([0-9]{4}) ]]; then
+    if [[ "${title_norm}" =~ edition:[[:space:]]+([a-z]+)[[:space:]]+([0-9]{1,2})[a-z]*[[:space:]]+([0-9]{4}) ]]; then
         month="${BASH_REMATCH[1]}"
         day="${BASH_REMATCH[2]}"
         year="${BASH_REMATCH[3]}"
-        iso="$(date -d "${month} ${day} ${year}" +%F 2>/dev/null || true)"
-        [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
-        echo "${iso}"
-        return 0
+    elif [[ "${title_norm}" =~ edition:[[:space:]]+([0-9]{1,2})[a-z]*[[:space:]]+([a-z]+)[[:space:]]+([0-9]{4}) ]]; then
+        day="${BASH_REMATCH[1]}"
+        month="${BASH_REMATCH[2]}"
+        year="${BASH_REMATCH[3]}"
+    else
+        return 1
     fi
 
-    return 1
+    iso="$(date -d "${month} ${day} ${year}" +%F 2>/dev/null || true)"
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    echo "${iso}"
 }
 
 economist_edition_date_for_rss_item() {
@@ -587,6 +593,48 @@ economist_local_edition_status() {
     fi
 }
 
+economist_local_edition_status_for_iso() {
+    local iso="$1" alt_iso="${2:-}" status="" dir="" legacy_dir="" rss_file="" pos=""
+
+    dir="$(economist_edition_output_dir_for_status "${iso}")"
+    status="$(economist_local_edition_status "${dir}")"
+    if [[ "${status}" == "already processed" ]]; then
+        echo "${status}"
+        return 0
+    fi
+
+    legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${iso}")"
+    status="$(economist_local_edition_status "${legacy_dir}")"
+    if [[ "${status}" == "already processed" ]]; then
+        echo "${status}"
+        return 0
+    fi
+
+    if [[ -z "${alt_iso}" ]]; then
+        rss_file="$(mktemp)"
+        if economist_rss_fetch_to "${rss_file}"; then
+            pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+            if [[ -n "${pos}" ]]; then
+                alt_iso="$(economist_edition_date_for_rss_position "${pos}")"
+            fi
+        fi
+        rm -f "${rss_file}"
+    fi
+
+    if [[ -n "${alt_iso}" && "${alt_iso}" != "${iso}" ]]; then
+        dir="$(economist_edition_output_dir_for_status "${alt_iso}")"
+        status="$(economist_local_edition_status "${dir}")"
+        if [[ "${status}" == "already processed" ]]; then
+            echo "${status}"
+            return 0
+        fi
+        legacy_dir="${ECONOMIST_OUTPUT_DIR}/$(economist_legacy_edition_dir_basename_for_date "${alt_iso}")"
+        status="$(economist_local_edition_status "${legacy_dir}")"
+    fi
+
+    echo "${status}"
+}
+
 economist_read_tty_line() {
     local prompt="$1"
     local -n _line_ref="$2"
@@ -731,8 +779,7 @@ economist_check_new_edition_for_run() {
         fi
     fi
 
-    edition_dir="$(economist_edition_output_dir_for_status "${_resolved_iso_ref}")"
-    status="$(economist_local_edition_status "${edition_dir}")"
+    status="$(economist_local_edition_status_for_iso "${_resolved_iso_ref}")"
     issue_no="$(economist_issue_number_for_edition_date "${_resolved_iso_ref}" 2>/dev/null || echo "—")"
 
     if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 ]]; then
@@ -900,8 +947,9 @@ economist_show_and_pick_available_editions() {
 
         title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
         edition_iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
-        edition_dir="$(economist_edition_output_dir_for_status "${edition_iso}")"
-        local_status="$(economist_local_edition_status "${edition_dir}")"
+        local_status="$(economist_local_edition_status_for_iso \
+            "${edition_iso}" \
+            "$(economist_edition_date_for_rss_position "${pos}")")"
         issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"
 
         pick_isos+=("${edition_iso}")
