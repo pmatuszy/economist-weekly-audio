@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.4 - do not chmod repo clone (keeps git pull clean)
 # 2026.07.16 - v. 1.3 - discard local scripts/ edits before git pull (-y)
 # 2026.07.15 - v. 1.2 - source github-bin _script_header.sh directly (drop wrapper)
 # 2026.07.15 - v. 1.1 - _script_header.sh banner via _economist-script-header.sh
@@ -217,14 +218,6 @@ if ! sync_repo "${PRIVATE_REPO}" "${PRIVATE_GIT_URL}" "economist-weekly-audio-pr
     echo
 fi
 
-if [[ -d "${PUBLIC_REPO}/scripts" ]]; then
-    chmod 700 "${PUBLIC_REPO}"/scripts/*.sh 2>/dev/null || true
-fi
-
-if [[ ! -x "${PUBLIC_REPO}/install.sh" ]]; then
-    chmod +x "${PUBLIC_REPO}/install.sh"
-fi
-
 install_args=(--bin-dir "${BIN_DIR}")
 if (( ASSUME_YES )); then
     install_args+=(-y)
@@ -234,5 +227,5 @@ echo
 echo "Running ${PUBLIC_REPO}/install.sh ${install_args[*]}"
 echo
 
-"${PUBLIC_REPO}/install.sh" "${install_args[@]}"
+bash "${PUBLIC_REPO}/install.sh" "${install_args[@]}"
 exit $?
