@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260716.233501 - detect processed editions in work dir as well as output dir
 # v. 20260716.162603 - orchestrate full pipeline with healthcheck pings
 # Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
 
@@ -253,8 +254,9 @@ ECONOMIST_PIPELINE_EDITION_URL="${latest_edition}"
 ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
 ECONOMIST_PIPELINE_EDITION_NAME="${edition_name}"
 
-status_dir="$(economist_edition_output_dir_for_status "${resolved_edition_iso}")"
-if [[ "$(economist_local_edition_status "${status_dir}")" == "already processed" ]]; then
+status_issue_no="$(economist_issue_number_for_edition_date "${resolved_edition_iso}" 2>/dev/null || true)"
+status_dir="$(economist_resolve_processed_edition_dir "${resolved_edition_iso}" "" "${status_issue_no}" 2>/dev/null || true)"
+if [[ -n "${status_dir}" ]]; then
     if [[ "${ECONOMIST_FORCE_REPROCESS:-0}" == 1 ]]; then
         echo "Force reprocess — removing existing edition output and work files..."
         economist_force_reprocess_edition "${status_dir}" "${work_dir}"
