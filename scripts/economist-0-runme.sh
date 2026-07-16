@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 2026.07.16 - v. 1.18 - drop website archive line on download; clarify on quit only
 # 2026.07.16 - v. 1.17 - quit when no new RSS edition; proceed prompt only if new
 # 2026.07.16 - v. 1.16 - RSS verify + proceed prompt before download (10s, Y default)
 # 2026.07.16 - v. 1.15 - print summary when user quits show-available without picking
@@ -209,7 +210,7 @@ export wget_params economist_url
 UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
 ARCHIVE='https://www.economist.com/weeklyedition/archive'
 
-latest_edition="$(
+economist_fetch_website_newest_edition_url() {
     wget -qO- --user-agent="$UA" \
         --header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
         --header='Accept-Language: en-US,en;q=0.9' \
@@ -221,9 +222,8 @@ latest_edition="$(
         "$ARCHIVE" \
     | grep -oE '/weeklyedition/[0-9]{4}-[0-9]{2}-[0-9]{2}' \
     | head -n1 | sed 's#^#https://www.economist.com#' | sort -u
-)"
+}
 
-archive_edition_url="${latest_edition}"
 explicit_edition_iso=""
 if [[ ${#edition_date_args[@]} -eq 1 ]]; then
     explicit_edition_iso="${edition_date_args[0]}"
@@ -232,8 +232,17 @@ fi
 resolved_edition_iso=""
 if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
     if ! economist_check_new_edition_for_run "${explicit_edition_iso}" "${ECONOMIST_FORCE_REPROCESS:-0}" resolved_edition_iso; then
-        if [[ -n "${archive_edition_url}" ]]; then
-            log_kv "Economist.com archive:" "${archive_edition_url}"
+        website_url=""
+        website_iso=""
+        website_url="$(economist_fetch_website_newest_edition_url 2>/dev/null || true)"
+        if [[ -n "${website_url}" ]]; then
+            website_iso="$(economist_edition_iso_from_weekly_url "${website_url}" 2>/dev/null || true)"
+        fi
+        if [[ -n "${website_iso}" ]]; then
+            echo
+            echo "The Economist website already lists ${website_iso} (cover date at economist.com/weeklyedition/archive)."
+            echo "That is not what this script downloads — only editions verified on the RSS server count."
+            echo
         fi
         economist_set_run_step no_new_edition
         economist_exit_pipeline 0
@@ -241,7 +250,9 @@ if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
 else
     resolved_edition_iso="${explicit_edition_iso}"
     if [[ -z "${resolved_edition_iso}" ]]; then
-        resolved_edition_iso="$(economist_edition_iso_from_weekly_url "${archive_edition_url}" 2>/dev/null || true)"
+        resolved_edition_iso="$(
+            economist_edition_iso_from_weekly_url "$(economist_fetch_website_newest_edition_url 2>/dev/null || true)" 2>/dev/null || true
+        )"
     fi
     if [[ -z "${resolved_edition_iso}" ]]; then
         echo "Cannot determine edition date." >&2
@@ -252,11 +263,7 @@ fi
 latest_edition="https://www.economist.com/weeklyedition/${resolved_edition_iso}"
 args=("${resolved_edition_iso}")
 
-if [[ -n "${archive_edition_url}" && "${archive_edition_url}" != "${latest_edition}" ]]; then
-    log_kv "Economist.com archive:" "${archive_edition_url}"
-fi
-
-log_kv "Latest edition URL:" "${latest_edition}"
+log_kv "RSS edition to download:" "${latest_edition}"
 
 edition_directory="${output_dir}/$(echo "${latest_edition}" | awk -F'/' '{split($NF, date, "-"); print date[1]"."date[2]"."date[3]}')_TheEconomist"
 edition_name="$(basename "${edition_directory}")"
