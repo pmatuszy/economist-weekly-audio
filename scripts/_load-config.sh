@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 2026.07.16 - v. 2.28 - detailed config checks: dir write, ffmpeg run, file owner
 # 2026.07.16 - v. 2.27 - print config summary immediately before proceed prompt
 # 2026.07.16 - v. 2.26 - ECONOMIST_CONFIG_FILE; print config OK after validation
 # 2026.07.16 - v. 2.25 - validate_economist_config for main pipeline startup
@@ -201,6 +202,11 @@ economist_config_require_executable() {
 
     economist_config_require_non_blank _errs "${name}" "${value}" || return 1
 
+    if [[ ! -f "${value}" ]]; then
+        economist_config_add_error _errs "${name} file does not exist: ${value}"
+        return 1
+    fi
+
     if [[ ! -x "${value}" ]]; then
         economist_config_add_error _errs "${name} is not executable: ${value}"
         return 1
@@ -208,9 +214,67 @@ economist_config_require_executable() {
     return 0
 }
 
+economist_config_validate_dir_writable() {
+    local -n _errs=$1
+    local name="$2" dir="${3:-}" probe="" parent="" run_user
+
+    run_user="$(id -un 2>/dev/null || echo unknown)"
+
+    economist_config_require_abs_dir_path _errs "${name}" "${dir}" || return 1
+
+    if [[ -e "${dir}" ]]; then
+        if [[ ! -w "${dir}" ]]; then
+            economist_config_add_error _errs \
+                "${name} is not writable by ${run_user}: ${dir}"
+        fi
+    else
+        parent="${dir}"
+        while [[ ! -e "${parent}" && "${parent}" != "/" ]]; do
+            parent="$(dirname "${parent}")"
+        done
+        if [[ -e "${parent}" && ! -w "${parent}" ]]; then
+            economist_config_add_error _errs \
+                "${name} does not exist and ${parent} is not writable by ${run_user}"
+        fi
+    fi
+
+    probe="${dir}/.economist-write-test-$$"
+    if ! mkdir -p "${probe}" 2>/dev/null; then
+        economist_config_add_error _errs \
+            "${name} — ${run_user} cannot create directories under: ${dir}"
+        return 1
+    fi
+    if ! rmdir "${probe}" 2>/dev/null; then
+        rm -rf "${probe}" 2>/dev/null || true
+        economist_config_add_error _errs \
+            "${name} — ${run_user} created a test directory but cannot remove it: ${probe}"
+    fi
+}
+
+economist_config_validate_ffmpeg() {
+    local -n _errs=$1
+    local path="${2:-}" version_line="" rc=0 run_user
+
+    run_user="$(id -un 2>/dev/null || echo unknown)"
+    ECONOMIST_FFMPEG_VERSION=""
+
+    economist_config_require_executable _errs "FFMPEG_PATH" "${path}" || return 1
+
+    version_line="$("${path}" -hide_banner -version 2>&1 | head -n1)" || rc=$?
+    if (( rc != 0 )) || economist_config_is_blank "${version_line}"; then
+        economist_config_add_error _errs \
+            "FFMPEG_PATH cannot be executed by ${run_user}: ${path} (exit ${rc})"
+        return 1
+    fi
+
+    ECONOMIST_FFMPEG_VERSION="${version_line}"
+}
+
 economist_config_validate_file_owner() {
     local -n _errs=$1
-    local owner="${2:-}" user group
+    local owner="${2:-}" user group run_uid
+
+    run_uid="$(id -u 2>/dev/null || echo 0)"
 
     if economist_config_is_blank "${owner}"; then
         return 0
@@ -237,6 +301,11 @@ economist_config_validate_file_owner() {
         economist_config_add_error _errs \
             "ECONOMIST_FILE_OWNER user does not exist: ${owner}"
     fi
+
+    if (( run_uid != 0 )); then
+        economist_config_add_error _errs \
+            "ECONOMIST_FILE_OWNER is set to ${owner} but pipeline runs as $(id -un 2>/dev/null) (uid ${run_uid}); chown requires root"
+    fi
 }
 
 validate_economist_config() {
@@ -253,10 +322,10 @@ validate_economist_config() {
         economist_config_require_http_url errors "HEALTHCHECK_URL" "${HEALTHCHECK_URL}"
     fi
 
-    economist_config_require_abs_dir_path errors "ECONOMIST_BASE_DIR" "${ECONOMIST_BASE_DIR:-}"
-    economist_config_require_abs_dir_path errors "ECONOMIST_WORK_DIR" "${ECONOMIST_WORK_DIR:-}"
-    economist_config_require_abs_dir_path errors "ECONOMIST_OUTPUT_DIR" "${ECONOMIST_OUTPUT_DIR:-}"
-    economist_config_require_abs_dir_path errors "ECONOMIST_ARCHIVE_DIR" "${ECONOMIST_ARCHIVE_DIR:-}"
+    economist_config_validate_dir_writable errors "ECONOMIST_BASE_DIR" "${ECONOMIST_BASE_DIR:-}"
+    economist_config_validate_dir_writable errors "ECONOMIST_WORK_DIR" "${ECONOMIST_WORK_DIR:-}"
+    economist_config_validate_dir_writable errors "ECONOMIST_OUTPUT_DIR" "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_config_validate_dir_writable errors "ECONOMIST_ARCHIVE_DIR" "${ECONOMIST_ARCHIVE_DIR:-}"
 
     if ! economist_config_is_blank "${ECONOMIST_WORK_DIR:-}" \
         && ! economist_config_is_blank "${ECONOMIST_OUTPUT_DIR:-}" \
@@ -265,8 +334,12 @@ validate_economist_config() {
             "ECONOMIST_WORK_DIR and ECONOMIST_OUTPUT_DIR must not be the same path"
     fi
 
-    economist_config_require_executable errors "FFMPEG_PATH" "${FFMPEG_PATH:-}"
+    economist_config_validate_ffmpeg errors "${FFMPEG_PATH:-}"
     economist_config_validate_file_owner errors "${ECONOMIST_FILE_OWNER:-}"
+
+    if ! economist_config_is_blank "${CURL_IMPERSONATE:-}"; then
+        economist_config_require_executable errors "CURL_IMPERSONATE" "${CURL_IMPERSONATE}"
+    fi
 
     if ((${#errors[@]} > 0)); then
         echo "Invalid economist.local.conf:" >&2
@@ -279,7 +352,10 @@ validate_economist_config() {
 }
 
 economist_print_config_ok() {
-    local hc_state owner_state
+    local hc_state owner_state run_user run_uid
+
+    run_user="$(id -un 2>/dev/null || echo unknown)"
+    run_uid="$(id -u 2>/dev/null || echo ?)"
 
     if economist_config_is_blank "${HEALTHCHECK_URL:-}"; then
         hc_state="disabled"
@@ -295,10 +371,12 @@ economist_print_config_ok() {
 
     echo "---------- Config ----------"
     economist_summary_line "Config file:" "${ECONOMIST_CONFIG_FILE:-economist.local.conf}"
-    economist_summary_line "Work dir:" "${ECONOMIST_WORK_DIR:-}"
-    economist_summary_line "Output dir:" "${ECONOMIST_OUTPUT_DIR:-}"
-    economist_summary_line "Archive dir:" "${ECONOMIST_ARCHIVE_DIR:-}"
+    economist_summary_line "Running as:" "${run_user} (uid ${run_uid})"
+    economist_summary_line "Work dir:" "${ECONOMIST_WORK_DIR:-} (writable, mkdir OK)"
+    economist_summary_line "Output dir:" "${ECONOMIST_OUTPUT_DIR:-} (writable, mkdir OK)"
+    economist_summary_line "Archive dir:" "${ECONOMIST_ARCHIVE_DIR:-} (writable, mkdir OK)"
     economist_summary_line "FFmpeg:" "${FFMPEG_PATH:-}"
+    economist_summary_line "FFmpeg version:" "${ECONOMIST_FFMPEG_VERSION:-unknown}"
     economist_summary_line "File owner:" "${owner_state}"
     economist_summary_line "Healthcheck:" "${hc_state}"
     economist_summary_line "Status:" "loaded and validated OK"
