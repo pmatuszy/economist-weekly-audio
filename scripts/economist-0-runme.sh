@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.123201 - punctuation on edition-not-found status line
 # v. 20260717.123001 - status messages while fetching/checking RSS
 # v. 20260717.122001 - website hint only when checking latest edition (no CLI date)
 # v. 20260717.120501 - CLI date: resolve + pick-style confirm before pipeline start

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.123201 - punctuation on edition-not-found status line
 # v. 20260717.123001 - status messages while fetching/checking RSS
 # v. 20260717.122601 - clearer website-vs-RSS explanation when no new edition
 # v. 20260717.120501 - CLI date: config + pick-style confirm before pipeline start
@@ -1151,7 +1152,7 @@ economist_verify_edition_date_on_server() {
                 fi
             done
             if (( rc != 0 )) && economist_status_wanted; then
-                printf ' not found.\n' >&2
+                printf '.. not found.\n' >&2
             fi
         fi
     fi
