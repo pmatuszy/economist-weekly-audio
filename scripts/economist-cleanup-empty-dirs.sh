@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
+# v. 20260717.132001 - unified log file for interactive and cron runs
 # v. 20260716.162609 - cron: remove empty edition subdirs under output
 # Safe cron helper: paths come from economist.local.conf, not unexpanded shell variables.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_load-config.sh
 source "${SCRIPT_DIR}/_load-config.sh"
+
+load_economist_config
+validate_economist_config
+economist_init_run_log
+
 _economist_header_extra=()
 if ! tty >/dev/null 2>&1; then
     _economist_header_extra=(NO_STARTUP_DELAY)
@@ -21,8 +27,6 @@ else
     echo "Warning: _script_header.sh not found — install github-bin into ${profile_location_dir:-$HOME}/bin/." >&2
 fi
 unset _economist_header_file _economist_header_extra
-
-load_economist_config
 
 economist_run_control_init step
 economist_install_run_traps

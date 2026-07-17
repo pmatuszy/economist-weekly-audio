@@ -484,7 +484,7 @@ warn_if_crontab_has_external_flock() {
             echo
             echo "NOTE: Your crontab wraps economist jobs in flock."
             echo "      Remove the flock wrapper — scripts now acquire the lock themselves."
-            echo "      Use: \${ECONOMIST_MAIN_SCRIPT} >>\${ECONOMIST_LOG} 2>&1"
+            echo "      Use: \${ECONOMIST_MAIN_SCRIPT}"
             echo
             return 0
         fi
@@ -889,6 +889,15 @@ crontab_active_line_is_outdated() {
     if [[ "${trimmed}" == ECONOMIST_LOG=* ]] && [[ "${trimmed}" != *'/var/log/economist-runme.log'* ]]; then
         return 0
     fi
+    if [[ "${core}" == *'economist-0-runme.sh'* && "${core}" == *'>>'* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *'economist-archive-editions.sh'* && "${core}" == *'>>'* ]]; then
+        return 0
+    fi
+    if [[ "${core}" == *'economist-cleanup-empty-dirs.sh'* && "${core}" == *'>>'* ]]; then
+        return 0
+    fi
     if [[ "${core}" == *flock* ]] && [[ "${core}" == *'${ECONOMIST_MAIN_SCRIPT}'* || "${core}" == *'${ECONOMIST_RUN}'* || "${core}" == *economist-0-runme.sh* ]]; then
         return 0
     fi
@@ -1073,17 +1082,17 @@ ECONOMIST_OUTPUT=${ECON_CRON_OUTPUT_DIR}
 ECONOMIST_ARCHIVE=${ECON_CRON_ARCHIVE_DIR}
 
 # Thursday evening (edition usually available)
-30 21-23 * * 4 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
+30 21-23 * * 4 ${ECON_CRON_RUN_CMD}
 
 # Retry early morning and daytime (Mon–Wed, Fri–Sun)
-15 0-4  * * 0-3,5,6 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
-15 7-22 * * 0-3,5,6 ${ECON_CRON_RUN_CMD} >>\${ECONOMIST_LOG} 2>&1
+15 0-4  * * 0-3,5,6 ${ECON_CRON_RUN_CMD}
+15 7-22 * * 0-3,5,6 ${ECON_CRON_RUN_CMD}
 
 # Move processed editions to archive (Thursday night; replaces existing copy)
-0 2 * * 4 \${ECONOMIST_BIN}/economist-archive-editions.sh >>\${ECONOMIST_LOG} 2>&1
+0 2 * * 4 \${ECONOMIST_BIN}/economist-archive-editions.sh
 
 # Remove empty edition subdirs in output (Wednesday)
-0 4 * * 3 \${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh >>\${ECONOMIST_LOG} 2>&1
+0 4 * * 3 \${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh
 
 ${ECON_CRON_FLOCK_NOTE}
 EOF
@@ -1142,6 +1151,7 @@ offer_crontab_obsolete_migration() {
         echo "  - /bin/mv for archive -> use economist-archive-editions.sh (replaces existing copies)"
         echo "  - find on \${ECONOMIST_OUTPUT} -> use economist-cleanup-empty-dirs.sh"
         echo "  - ECONOMIST_LOCK= in crontab (lock is now inside the script)"
+        echo "  - cron >>\${ECONOMIST_LOG} redirects (scripts log internally now)"
         echo "  - ECONOMIST_LOG under /root/var/log instead of /var/log"
         echo
         echo "The whole economist block will be commented out and replaced."

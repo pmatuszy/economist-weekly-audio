@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# v. 20260717.132001 - unified log file for interactive and cron runs
+# v. 20260717.131001 - print log file destination at startup
 # v. 20260717.125501 - default yes on nearby-editions browse prompt
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - abort if resolved edition not in RSS; log resolved date
@@ -91,6 +93,7 @@ source "${SCRIPT_DIR}/_load-config.sh"
 
 load_economist_config
 validate_economist_config
+economist_init_run_log
 
 if (( ${#raw_date_args[@]} == 1 )); then
     normalized_edition_iso=""
@@ -115,6 +118,7 @@ if [[ -n "${_economist_header_file}" ]]; then
     fi
     if (( ! script_is_run_interactively )); then
         echo "${SCRIPT_VERSION}"
+        economist_print_log_destination
         echo
     fi
 else

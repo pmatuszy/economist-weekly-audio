@@ -1,4 +1,7 @@
 # shellcheck shell=bash
+# v. 20260717.133001 - validate ECONOMIST_LOG is readable and append-writable
+# v. 20260717.132001 - unified log file for interactive and cron runs
+# v. 20260717.131001 - print log file destination at startup
 # v. 20260717.130501 - Enter on nearest-edition prompt offers nearby browse (same as n)
 # v. 20260717.130001 - clearer missing-config help (reinstall vs GitHub install.sh)
 # v. 20260717.125501 - default yes on nearby-editions browse prompt
@@ -174,6 +177,7 @@ load_economist_config() {
     : "${CURL_IMPERSONATE:=/usr/local/bin/curl-impersonate/curl_chrome116}"
     : "${HEALTHCHECK_URL:=}"
     : "${ECONOMIST_LOCK_FILE:=/var/lock/economist-runme.lock}"
+    : "${ECONOMIST_LOG:=/var/log/economist-runme.log}"
 }
 
 economist_config_is_blank() {
@@ -298,6 +302,79 @@ economist_config_validate_ffmpeg() {
     ECONOMIST_FFMPEG_VERSION="${version_line}"
 }
 
+economist_config_validate_log_file() {
+    local err_arr="$1" log_file="${2:-}" log_dir="" parent="" run_user="" created=0
+
+    run_user="$(id -un 2>/dev/null || echo unknown)"
+    ECONOMIST_LOG_STATUS=""
+
+    economist_config_require_non_blank "${err_arr}" "ECONOMIST_LOG" "${log_file}" || return 1
+
+    if [[ "${log_file}" != /* ]]; then
+        economist_config_add_error "${err_arr}" \
+            "ECONOMIST_LOG must be an absolute path (got: ${log_file})"
+        return 1
+    fi
+
+    log_dir="$(dirname "${log_file}")"
+    parent="${log_dir}"
+    while [[ ! -e "${parent}" && "${parent}" != "/" ]]; do
+        parent="$(dirname "${parent}")"
+    done
+    if [[ -e "${parent}" && ! -w "${parent}" ]]; then
+        economist_config_add_error "${err_arr}" \
+            "ECONOMIST_LOG directory is not writable by ${run_user}: ${log_dir}"
+        return 1
+    fi
+
+    if ! mkdir -p "${log_dir}" 2>/dev/null; then
+        economist_config_add_error "${err_arr}" \
+            "ECONOMIST_LOG — ${run_user} cannot create log directory: ${log_dir}"
+        return 1
+    fi
+
+    if [[ -e "${log_file}" ]]; then
+        if [[ ! -f "${log_file}" ]]; then
+            economist_config_add_error "${err_arr}" \
+                "ECONOMIST_LOG exists but is not a regular file: ${log_file}"
+            return 1
+        fi
+        if [[ ! -r "${log_file}" ]]; then
+            economist_config_add_error "${err_arr}" \
+                "ECONOMIST_LOG is not readable by ${run_user}: ${log_file}"
+            return 1
+        fi
+        if [[ ! -w "${log_file}" ]]; then
+            economist_config_add_error "${err_arr}" \
+                "ECONOMIST_LOG is not writable by ${run_user}: ${log_file}"
+            return 1
+        fi
+    else
+        if ! : >>"${log_file}" 2>/dev/null; then
+            economist_config_add_error "${err_arr}" \
+                "ECONOMIST_LOG — ${run_user} cannot create log file: ${log_file}"
+            return 1
+        fi
+        rm -f "${log_file}" 2>/dev/null || true
+        created=1
+    fi
+
+    if ! printf '' >>"${log_file}" 2>/dev/null; then
+        economist_config_add_error "${err_arr}" \
+            "ECONOMIST_LOG — ${run_user} cannot append to log file: ${log_file}"
+        if (( created )); then
+            rm -f "${log_file}" 2>/dev/null || true
+        fi
+        return 1
+    fi
+
+    if (( created )); then
+        rm -f "${log_file}" 2>/dev/null || true
+    fi
+
+    ECONOMIST_LOG_STATUS="readable, append OK"
+}
+
 economist_config_validate_file_owner() {
     local err_arr="$1" owner="${2:-}" user group run_uid
 
@@ -353,6 +430,7 @@ validate_economist_config() {
     economist_config_validate_dir_writable errors "ECONOMIST_WORK_DIR" "${ECONOMIST_WORK_DIR:-}"
     economist_config_validate_dir_writable errors "ECONOMIST_OUTPUT_DIR" "${ECONOMIST_OUTPUT_DIR:-}"
     economist_config_validate_dir_writable errors "ECONOMIST_ARCHIVE_DIR" "${ECONOMIST_ARCHIVE_DIR:-}"
+    economist_config_validate_log_file errors "${ECONOMIST_LOG:-}"
 
     if ! economist_config_is_blank "${ECONOMIST_WORK_DIR:-}" \
         && ! economist_config_is_blank "${ECONOMIST_OUTPUT_DIR:-}" \
@@ -375,6 +453,68 @@ validate_economist_config() {
             echo "  - ${err}" >&2
         done
         exit 1
+    fi
+}
+
+economist_stdout_redirect_target() {
+    local target=""
+
+    if [[ ! -r /proc/self/fd/1 ]]; then
+        return 1
+    fi
+
+    target="$(readlink -f /proc/self/fd/1 2>/dev/null || true)"
+    [[ -n "${target}" && -f "${target}" ]] || return 1
+    echo "${target}"
+}
+
+economist_log_run_separator() {
+    local script_name="${1:-${ECONOMIST_SCRIPT_NAME:-unknown}}"
+
+    echo ""
+    echo "========== Economist run started $(date '+%Y-%m-%d %H:%M:%S') [${script_name}] pid $$ =========="
+}
+
+economist_init_run_log() {
+    local log_dir log_file redirect_target="" script_name=""
+
+    if [[ "${ECONOMIST_LOG_INIT_DONE:-0}" == 1 ]]; then
+        return 0
+    fi
+
+    : "${ECONOMIST_LOG:=/var/log/economist-runme.log}"
+    log_file="${ECONOMIST_LOG}"
+    log_dir="$(dirname "${log_file}")"
+    script_name="$(basename "${BASH_SOURCE[1]:-unknown}")"
+
+    mkdir -p "${log_dir}" 2>/dev/null || true
+
+    if redirect_target="$(economist_stdout_redirect_target)"; then
+        if [[ "${redirect_target}" == "${log_file}" ]]; then
+            ECONOMIST_LOG_INIT_DONE=1
+            economist_log_run_separator "${script_name}"
+            return 0
+        fi
+    fi
+
+    if [[ -t 1 ]]; then
+        exec > >(tee -a "${log_file}") 2>&1
+    else
+        exec >>"${log_file}" 2>&1
+    fi
+
+    ECONOMIST_LOG_INIT_DONE=1
+    economist_log_run_separator "${script_name}"
+}
+
+economist_print_log_destination() {
+    : "${ECONOMIST_LOG:=/var/log/economist-runme.log}"
+    local log_state="${ECONOMIST_LOG_STATUS:-readable, append OK}"
+
+    if [[ -t 1 ]]; then
+        economist_summary_line "Log file:" "${ECONOMIST_LOG} (${log_state}; also on terminal)"
+    else
+        economist_summary_line "Log file:" "${ECONOMIST_LOG} (${log_state})"
     fi
 }
 
@@ -406,6 +546,7 @@ economist_print_config_ok() {
     economist_summary_line "FFmpeg version:" "${ECONOMIST_FFMPEG_VERSION:-unknown}"
     economist_summary_line "File owner:" "${owner_state}"
     economist_summary_line "Healthcheck:" "${hc_state}"
+    economist_print_log_destination
     economist_summary_line "Status:" "loaded and validated OK"
     echo "----------------------------"
 }

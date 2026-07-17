@@ -21,6 +21,8 @@ ECONOMIST_ARCHIVE_DIR="${ECONOMIST_BASE_DIR}/archive"
 # --- optional tooling ---
 # Lock file for overlap protection (scripts use flock at startup).
 ECONOMIST_LOCK_FILE='/var/lock/economist-runme.lock'
+# Log file appended by every run (interactive and cron).
+ECONOMIST_LOG='/var/log/economist-runme.log'
 # ECONOMIST_SKIP_RUN_LOCK=1
 
 FFMPEG_PATH='/usr/local/bin/ffmpeg'

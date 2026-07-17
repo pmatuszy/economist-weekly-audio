@@ -14,17 +14,18 @@ ECONOMIST_OUTPUT=/worek/economist/theEconomist/_obrobione
 ECONOMIST_ARCHIVE=/worek/economist/theEconomist/archive
 
 # Thursday evening — edition usually available
-30 21-23 * * 4 ${ECONOMIST_MAIN_SCRIPT} >>${ECONOMIST_LOG} 2>&1
+# Scripts append to ECONOMIST_LOG themselves (interactive and cron).
+30 21-23 * * 4 ${ECONOMIST_MAIN_SCRIPT}
 
 # Retry: early morning and daytime (Mon–Wed, Fri–Sun; not Thursday)
-15 0-4  * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT} >>${ECONOMIST_LOG} 2>&1
-15 7-22 * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT} >>${ECONOMIST_LOG} 2>&1
+15 0-4  * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT}
+15 7-22 * * 0-3,5,6 ${ECONOMIST_MAIN_SCRIPT}
 
 # Archive processed editions (Thursday night; replaces existing copy)
-0 2 * * 4 ${ECONOMIST_BIN}/economist-archive-editions.sh >>${ECONOMIST_LOG} 2>&1
+0 2 * * 4 ${ECONOMIST_BIN}/economist-archive-editions.sh
 
 # Remove empty edition folders in output dir (Wednesday; paths from economist.local.conf)
-0 4 * * 3 ${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh >>${ECONOMIST_LOG} 2>&1
+0 4 * * 3 ${ECONOMIST_BIN}/economist-cleanup-empty-dirs.sh
 
 # Obsolete paths (install.sh can comment these out in your crontab automatically):
 # /root/scripts/0-economist-runme.sh  →  ${ECONOMIST_MAIN_SCRIPT}
