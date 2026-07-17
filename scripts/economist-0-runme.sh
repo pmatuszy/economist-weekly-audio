@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.090001 - --force/-f; YYYYMMDD date; nearest edition fallback
 # v. 20260717.082501 - pass sat_iso to processed-edition check before download
 # v. 20260716.233501 - detect processed editions in work dir as well as output dir
 # v. 20260716.162603 - orchestrate full pipeline with healthcheck pings
@@ -15,7 +16,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HEADER_EXTRA_ARGS=()
 edition_date_args=()
+raw_date_args=()
 SHOW_AVAILABLE=0
+FORCE_REPROCESS=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no_startup_delay|NO_STARTUP_DELAY)
@@ -27,9 +30,13 @@ while [[ $# -gt 0 ]]; do
             HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
             shift
             ;;
+        -f|--force)
+            FORCE_REPROCESS=1
+            shift
+            ;;
         -h|--help)
             cat <<EOF
-Usage: $(basename "$0") [--no_startup_delay] [--show-available] [YYYY-MM-DD]
+Usage: $(basename "$0") [options] [YYYY-MM-DD | YYYYMMDD]
 
 Run the full Economist weekly audio pipeline.
 
@@ -37,24 +44,33 @@ Options:
   --no_startup_delay   Skip random startup delay (recommended for cron).
   --show-available     List RSS editions verified on the server; pick one to download.
   --list-available     Alias for --show-available.
-  YYYY-MM-DD             Process a specific edition date instead of the latest.
+  -f, --force          Re-download and reprocess even if the edition already exists.
+  YYYY-MM-DD           Download a specific edition cover date (e.g. 2026-07-18).
+  YYYYMMDD             Same date without dashes (e.g. 20260718).
+
+If the requested date is not on the RSS server, the nearest verified edition is
+suggested interactively (default: no).
 
 Requires github-bin _script_header.sh in \${profile_location_dir:-\$HOME}/bin/.
 EOF
             exit 0
             ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            echo "Try: $(basename "$0") --help" >&2
+            exit 1
+            ;;
         *)
-            if [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && $(date -d "$1" +%F 2>/dev/null) == "$1" ]]; then
-                edition_date_args=("$1")
-                shift
-            else
-                echo "Unknown argument or invalid date: $1" >&2
-                echo "Expected YYYY-MM-DD (e.g., 2025-09-13), --show-available, or --no_startup_delay" >&2
-                exit 1
-            fi
+            raw_date_args+=("$1")
+            shift
             ;;
     esac
 done
+
+if (( ${#raw_date_args[@]} > 1 )); then
+    echo "Specify at most one edition date." >&2
+    exit 1
+fi
 
 if ! tty >/dev/null 2>&1; then
     HEADER_EXTRA_ARGS+=(NO_STARTUP_DELAY)
@@ -65,6 +81,18 @@ source "${SCRIPT_DIR}/_load-config.sh"
 
 load_economist_config
 validate_economist_config
+
+if (( ${#raw_date_args[@]} == 1 )); then
+    normalized_edition_iso=""
+    if ! normalized_edition_iso="$(economist_normalize_edition_iso "${raw_date_args[0]}")"; then
+        echo "Invalid edition date: ${raw_date_args[0]}" >&2
+        echo "Expected YYYY-MM-DD (e.g. 2026-07-18) or YYYYMMDD (e.g. 20260718)." >&2
+        exit 1
+    fi
+    edition_date_args=("${normalized_edition_iso}")
+fi
+
+ECONOMIST_FORCE_REPROCESS="${FORCE_REPROCESS}"
 
 _economist_header_file="$(economist_find_script_header_file)" || true
 if [[ -n "${_economist_header_file}" ]]; then
@@ -109,7 +137,11 @@ if (( SHOW_AVAILABLE )); then
         economist_finish_run 0
     fi
     edition_date_args=("${picked_edition}")
-    ECONOMIST_FORCE_REPROCESS="${force_reprocess}"
+    if (( FORCE_REPROCESS )); then
+        ECONOMIST_FORCE_REPROCESS=1
+    else
+        ECONOMIST_FORCE_REPROCESS="${force_reprocess}"
+    fi
     ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT=1
 fi
 
@@ -268,6 +300,7 @@ if [[ -n "${status_dir}" ]]; then
             echo "Edition ${resolved_edition_iso} (issue ${status_issue_no}) is already processed:"
             echo "  ${status_dir}"
             echo "Will not download this edition again..."
+            economist_force_redownload_hint
             echo "... exiting."
         )
         economist_set_run_step already_exists

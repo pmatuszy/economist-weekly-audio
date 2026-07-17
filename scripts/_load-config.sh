@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.090001 - normalize edition date; nearest RSS fallback; force hint
 # v. 20260717.083901 - fix nameref bugs breaking edition dir / archive detection
 # v. 20260717.082501 - detect processed via mp3/rar; sat_iso in pipeline skip; clean empty shells
 # v. 20260716.234001 - scan archive dir; size threshold; robust dir size; match all folders
@@ -920,6 +921,121 @@ economist_edition_iso_from_weekly_url() {
     echo "${BASH_REMATCH[1]}"
 }
 
+economist_normalize_edition_iso() {
+    local input="$1" y="" m="" d="" iso=""
+
+    [[ -n "${input}" ]] || return 1
+
+    if [[ "${input}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        iso="${input}"
+    elif [[ "${input}" =~ ^[0-9]{8}$ ]]; then
+        y="${input:0:4}"
+        m="${input:4:2}"
+        d="${input:6:2}"
+        iso="${y}-${m}-${d}"
+    else
+        return 1
+    fi
+
+    [[ "$(date -d "${iso}" +%F 2>/dev/null || true)" == "${iso}" ]] || return 1
+    echo "${iso}"
+}
+
+economist_force_redownload_hint() {
+    echo "Use: economist-0-runme.sh --force   (or -f) to re-download and reprocess."
+}
+
+economist_append_unique_iso() {
+    local array_name="$1" iso="$2" existing=""
+
+    local -n _arr_ref="${array_name}"
+    [[ -n "${iso}" ]] || return 0
+    for existing in "${_arr_ref[@]}"; do
+        [[ "${existing}" == "${iso}" ]] && return 0
+    done
+    _arr_ref+=("${iso}")
+}
+
+economist_collect_verified_rss_edition_isos() {
+    local array_name="$1"
+    local -n _isos_ref="${array_name}"
+    local rss_file="" pos=0 item_count=0 url="" iso=""
+
+    _isos_ref=()
+    rss_file="$(mktemp)"
+    trap 'rm -f "${rss_file}"' RETURN
+
+    economist_rss_fetch_to "${rss_file}" || return 1
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    (( item_count > 0 )) || return 1
+
+    for (( pos = 1; pos <= item_count; ++pos )); do
+        url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+        [[ -n "${url}" ]] || continue
+        economist_verify_enclosure_on_server "${url}" || continue
+        iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+        economist_append_unique_iso "${array_name}" "${iso}"
+    done
+
+    (( ${#_isos_ref[@]} > 0 ))
+}
+
+economist_nearest_verified_rss_edition_iso() {
+    local requested_iso="$1"
+    local -n _nearest_ref="$2"
+    local -a available=()
+    local iso="" req_epoch=0 iso_epoch=0 diff=0 best="" best_diff=-1
+
+    _nearest_ref=""
+    [[ "${requested_iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+
+    economist_collect_verified_rss_edition_isos available || return 1
+
+    req_epoch="$(date -d "${requested_iso}" +%s)"
+    for iso in "${available[@]}"; do
+        iso_epoch="$(date -d "${iso}" +%s)"
+        if (( iso_epoch >= req_epoch )); then
+            diff=$(( iso_epoch - req_epoch ))
+        else
+            diff=$(( req_epoch - iso_epoch ))
+        fi
+        if (( best_diff < 0 || diff < best_diff || ( diff == best_diff && iso < best ) )); then
+            best="${iso}"
+            best_diff="${diff}"
+        fi
+    done
+
+    [[ -n "${best}" ]] || return 1
+    _nearest_ref="${best}"
+}
+
+economist_prompt_nearest_edition_fallback() {
+    local requested_iso="$1" nearest_iso="$2" issue_no="" answer=""
+
+    issue_no="$(economist_issue_number_for_edition_date "${nearest_iso}" 2>/dev/null || echo "—")"
+    echo
+    echo "Edition ${requested_iso} is not available on the RSS server."
+    echo "Nearest verified edition: ${nearest_iso} (issue ${issue_no})."
+
+    if [[ ! -t 0 && ! -r /dev/tty ]]; then
+        echo "Non-interactive session — not downloading a substitute edition."
+        return 1
+    fi
+
+    economist_read_tty_char "Download ${nearest_iso} instead? [y/N]: " answer 60
+    case "${answer}" in
+        y|Y)
+            return 0
+            ;;
+        ''|n|N|q|Q)
+            return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 economist_verify_edition_date_on_server() {
     local iso="$1" rss_file="" pos=0 item_count=0 url="" edition_at_pos=""
 
@@ -976,10 +1092,22 @@ economist_check_new_edition_for_run() {
     if [[ -n "${explicit_iso}" ]]; then
         _resolved_iso_ref="${explicit_iso}"
         if ! economist_verify_edition_date_on_server "${explicit_iso}"; then
-            issue_no="$(economist_issue_number_for_edition_date "${explicit_iso}" 2>/dev/null || echo "—")"
-            echo
-            echo "No new edition on the server — ${explicit_iso} (issue ${issue_no}) is not in the RSS feed yet."
-            return 1
+            nearest_iso=""
+            if economist_nearest_verified_rss_edition_iso "${explicit_iso}" nearest_iso \
+                && [[ -n "${nearest_iso}" ]]; then
+                if economist_prompt_nearest_edition_fallback "${explicit_iso}" "${nearest_iso}"; then
+                    _resolved_iso_ref="${nearest_iso}"
+                else
+                    echo "Download cancelled."
+                    return 1
+                fi
+            else
+                issue_no="$(economist_issue_number_for_edition_date "${explicit_iso}" 2>/dev/null || echo "—")"
+                echo
+                echo "Edition ${explicit_iso} (issue ${issue_no}) is not on the RSS server."
+                echo "No verified substitute edition was found."
+                return 1
+            fi
         fi
     else
         if ! _resolved_iso_ref="$(economist_find_newest_verified_rss_edition)"; then
@@ -996,6 +1124,7 @@ economist_check_new_edition_for_run() {
     if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 ]]; then
         echo
         echo "No new edition — ${_resolved_iso_ref} (issue ${issue_no}) is already processed."
+        economist_force_redownload_hint
         return 1
     fi
 
