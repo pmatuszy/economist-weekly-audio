@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.130501 - Enter on nearest-edition prompt offers nearby browse (same as n)
 # v. 20260717.130001 - clearer missing-config help (reinstall vs GitHub install.sh)
 # v. 20260717.125501 - default yes on nearby-editions browse prompt
 # v. 20260717.125401 - reuse cached RSS; green nearest row in nearby picker
@@ -1561,13 +1562,13 @@ economist_prompt_nearest_edition_fallback() {
         y|Y)
             return 0
             ;;
-        n|N)
+        n|N|'')
             if (( timed_out == 0 )); then
                 return 2
             fi
             return 1
             ;;
-        q|Q|''|*)
+        q|Q|*)
             return 1
             ;;
     esac
