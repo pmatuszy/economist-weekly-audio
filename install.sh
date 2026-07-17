@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.222001 - fix set -e exit on (( counter++ )) when counter is 0
 # v. 20260717.221601 - fix bash syntax: quote -> in case patterns
 # v. 20260717.221501 - install plan: dedicated = column between Installed and Repository
 # v. 20260717.221401 - highlight script install plan when updates are pending
@@ -295,13 +296,13 @@ economist_install_plan_count_changes() {
         marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
         case "${marker}" in
             +)
-                ((_new_ref++))
+                _new_ref=$(( _new_ref + 1 ))
                 ;;
             '->')
-                ((_update_ref++))
+                _update_ref=$(( _update_ref + 1 ))
                 ;;
             *)
-                ((_same_ref++))
+                _same_ref=$(( _same_ref + 1 ))
                 ;;
         esac
     done
