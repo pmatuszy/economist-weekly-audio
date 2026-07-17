@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.124401 - print validated config block before RSS/edition checks
 # v. 20260717.124001 - browse nearby editions when user explicitly declines nearest
 # v. 20260717.123001 - status messages while fetching/checking RSS
 # v. 20260717.122001 - website hint only when checking latest edition (no CLI date)
@@ -122,6 +123,13 @@ DEBUG=1
 
 economist_run_control_init pipeline
 economist_install_run_traps
+
+if [[ -t 0 ]] || [[ -r /dev/tty ]]; then
+    echo
+    economist_print_config_ok
+    echo
+    ECONOMIST_CONFIG_OK_PRINTED=1
+fi
 
 ECONOMIST_PIPELINE_WORK_DIR="${ECONOMIST_WORK_DIR}"
 ECONOMIST_PIPELINE_OUTPUT_DIR="${ECONOMIST_OUTPUT_DIR}"

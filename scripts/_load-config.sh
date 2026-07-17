@@ -1592,7 +1592,9 @@ economist_confirm_edition_before_download() {
     echo
     economist_print_edition_selection_summary "${iso}"
     echo
-    economist_print_config_ok
+    if [[ "${ECONOMIST_CONFIG_OK_PRINTED:-0}" != 1 ]]; then
+        economist_print_config_ok
+    fi
     echo
 
     if [[ "${local_status}" == "already processed" ]]; then
