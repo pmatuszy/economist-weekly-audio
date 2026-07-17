@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# v. 20260717.221501 - install plan: dedicated = column between Installed and Repository
+# v. 20260717.221401 - highlight script install plan when updates are pending
 # v. 20260716.230201 - align v. prefix in Was/Now install columns
 # v. 20260716.162701 - install scripts into bin/conf; parse timestamp versions
 # Copies economist-N-*.sh scripts into bin/; child scripts run from same directory.
@@ -214,7 +216,17 @@ economist_print_script_version_cell() {
 economist_print_script_install_marker() {
     local marker="$1"
 
-    printf '%*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+    printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+}
+
+economist_print_script_install_table_header() {
+    local installed_label="$1" repo_label="$2"
+
+    printf '  %-*s %-*s %-*s %-*s\n' \
+        "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "${installed_label}" \
+        "${SCRIPT_INSTALL_MARKER_WIDTH}" "=" \
+        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "${repo_label}"
 }
 
 economist_format_script_version() {
@@ -236,41 +248,188 @@ economist_script_install_marker() {
     fi
 }
 
+install_tty_use_color() {
+    [[ -t 1 ]]
+}
+
+install_tty_emit() {
+    local seq="$1"
+
+    install_tty_use_color || return 0
+    printf '%b' "${seq}"
+}
+
+install_tty_reset() {
+    install_tty_emit $'\033[0m'
+}
+
+economist_install_plan_entries() {
+    local -n _entries_ref="$1"
+    local script_path name target
+
+    _entries_ref=()
+    for script_path in "${SCRIPT_PATHS[@]}"; do
+        name="$(basename "${script_path}")"
+        target="${BIN_DIR}/${name}"
+        _entries_ref+=("${name}|${target}|${script_path}")
+    done
+    _entries_ref+=("_load-config.sh|${BIN_DIR}/_load-config.sh|${SCRIPTS_DIR}/_load-config.sh")
+}
+
+economist_install_plan_count_changes() {
+    local -n _entries_ref="$1"
+    local -n _new_ref="$2"
+    local -n _update_ref="$3"
+    local -n _same_ref="$4"
+    local entry="" name="" installed="" repo="" current_parsed="" new_parsed="" marker=""
+
+    _new_ref=0
+    _update_ref=0
+    _same_ref=0
+
+    for entry in "${_entries_ref[@]}"; do
+        IFS='|' read -r name installed repo <<< "${entry}"
+        current_parsed="$(economist_parse_script_version "${installed}")"
+        new_parsed="$(economist_parse_script_version "${repo}")"
+        marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
+        case "${marker}" in
+            +)
+                ((_new_ref++))
+                ;;
+            ->)
+                ((_update_ref++))
+                ;;
+            *)
+                ((_same_ref++))
+                ;;
+        esac
+    done
+}
+
+install_print_script_changes_summary() {
+    local new_count="$1" update_count="$2" same_count="$3" total="$4"
+    local parts=() summary=""
+
+    if (( new_count + update_count == 0 )); then
+        install_tty_emit $'\033[32m'
+        echo "  All ${total} script(s) already match the repository."
+        install_tty_reset
+        return 0
+    fi
+
+    (( update_count > 0 )) && parts+=("${update_count} update(s)")
+    (( new_count > 0 )) && parts+=("${new_count} new")
+    summary="$(IFS=', '; echo "${parts[*]}")"
+
+    install_tty_emit $'\033[1;33m'
+    echo "  *** INSTALL CHANGES: ${summary} ***"
+    install_tty_reset
+    if (( same_count > 0 )); then
+        echo "      (${same_count} unchanged — see table below)"
+    fi
+}
+
+economist_print_script_install_marker_styled() {
+    local marker="$1"
+
+    case "${marker}" in
+        +)
+            install_tty_emit $'\033[1;32m'
+            printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+            install_tty_reset
+            ;;
+        ->)
+            install_tty_emit $'\033[1;33m'
+            printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+            install_tty_reset
+            ;;
+        *)
+            printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
+            ;;
+    esac
+}
+
 print_script_version_row() {
     local name="$1" installed_file="$2" repo_file="$3"
-    local current_parsed new_parsed marker
+    local row_style="${4:-normal}" marker="${5:-}"
+    local current_parsed="" new_parsed="" marker_cell=""
 
     current_parsed="$(economist_parse_script_version "${installed_file}")"
     new_parsed="$(economist_parse_script_version "${repo_file}")"
-    marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
+    if [[ -z "${marker}" ]]; then
+        marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
+    fi
 
+    case "${row_style}" in
+        highlight)
+            install_tty_emit $'\033[1m'
+            ;;
+        dim)
+            install_tty_emit $'\033[2m'
+            ;;
+    esac
+
+    marker_cell="$(economist_print_script_install_marker_styled "${marker}")"
+    # shellcheck disable=SC2059
     printf '  %-*s %s %s %s\n' \
         "${SCRIPT_INSTALL_NAME_WIDTH}" "${name}" \
         "$(economist_print_script_version_cell "${current_parsed}")" \
-        "$(economist_print_script_install_marker "${marker}")" \
+        "${marker_cell}" \
         "$(economist_print_script_version_cell "${new_parsed}")"
+
+    if [[ "${row_style}" != normal ]]; then
+        install_tty_reset
+    fi
 }
 
 print_scripts_install_plan() {
-    local script_path name target
+    local -a entries=()
+    local entry="" name="" installed="" repo=""
+    local count_new=0 count_update=0 count_same=0 count_total=0 has_changes=0
+    local current_parsed="" new_parsed="" marker="" row_style=""
+
+    economist_install_plan_entries entries
+    economist_install_plan_count_changes entries count_new count_update count_same
+    count_total=$((count_new + count_update + count_same))
+    has_changes=$((count_new + count_update > 0 ? 1 : 0))
 
     echo "Install into:"
     printf "  %s/\n" "${BIN_DIR}"
     echo
-    printf '  %-*s %-*s %*s %-*s\n' \
-        "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
-        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Installed" \
-        "${SCRIPT_INSTALL_MARKER_WIDTH}" "" \
-        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Repository"
-    printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
-    for script_path in "${SCRIPT_PATHS[@]}"; do
-        name="$(basename "${script_path}")"
-        target="${BIN_DIR}/${name}"
-        print_script_version_row "${name}" "${target}" "${script_path}"
-    done
-    print_script_version_row "_load-config.sh" "${BIN_DIR}/_load-config.sh" "${SCRIPTS_DIR}/_load-config.sh"
+    install_print_script_changes_summary "${count_new}" "${count_update}" "${count_same}" "${count_total}"
     echo
-    echo "  Legend:  + new   -> update   = unchanged"
+    economist_print_script_install_table_header "Installed" "Repository"
+    if (( has_changes )); then
+        install_tty_emit $'\033[1m'
+    fi
+    printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
+    if (( has_changes )); then
+        install_tty_reset
+    fi
+
+    for entry in "${entries[@]}"; do
+        IFS='|' read -r name installed repo <<< "${entry}"
+        current_parsed="$(economist_parse_script_version "${installed}")"
+        new_parsed="$(economist_parse_script_version "${repo}")"
+        marker="$(economist_script_install_marker "${current_parsed}" "${new_parsed}")"
+        row_style="normal"
+        if (( has_changes )); then
+            if [[ "${marker}" == "=" ]]; then
+                row_style="dim"
+            else
+                row_style="highlight"
+            fi
+        fi
+        print_script_version_row "${name}" "${installed}" "${repo}" "${row_style}" "${marker}"
+    done
+    echo
+    if (( has_changes )); then
+        install_tty_emit $'\033[1m'
+        echo "  Legend:  + new   -> update   = unchanged   (highlighted rows will change)"
+        install_tty_reset
+    else
+        echo "  Legend:  + new   -> update   = unchanged"
+    fi
     echo
 }
 
@@ -732,11 +891,7 @@ install_bin_scripts() {
     print_section "Installing scripts"
     mkdir -p "${BIN_DIR}"
 
-    printf '  %-*s %-*s %*s %-*s\n' \
-        "${SCRIPT_INSTALL_NAME_WIDTH}" "Script" \
-        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Was" \
-        "${SCRIPT_INSTALL_MARKER_WIDTH}" "" \
-        "${SCRIPT_INSTALL_VER_COL_WIDTH}" "Now"
+    economist_print_script_install_table_header "Was" "Now"
     printf '  %.*s\n' 78 '------------------------------------------------------------------------------'
 
     for script_path in "${SCRIPT_PATHS[@]}"; do
