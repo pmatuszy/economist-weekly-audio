@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260716.234001 - scan archive dir; size threshold; robust dir size; match all folders
 # v. 20260716.233501 - show-available: also scan ECONOMIST_WORK_DIR for edition folders
 # v. 20260716.233001 - size: pick largest output dir; GB %8.2f; unified processed status
 # v. 20260716.232501 - GB via printf %8.2f (always 2 decimal places)
@@ -629,14 +630,36 @@ economist_local_edition_status_for_iso() {
     echo "not downloaded"
 }
 
+economist_min_processed_edition_bytes() {
+    echo 1000000
+}
+
+economist_append_unique_storage_root() {
+    local -n _roots_ref="$1"
+    local root="$2" existing=""
+
+    [[ -n "${root}" ]] || return 0
+    for existing in "${_roots_ref[@]}"; do
+        [[ "${existing}" == "${root}" ]] && return 0
+    done
+    _roots_ref+=("${root}")
+}
+
 economist_edition_storage_roots() {
     local -n _roots_ref="$1"
 
     _roots_ref=()
-    [[ -n "${ECONOMIST_OUTPUT_DIR:-}" ]] && _roots_ref+=("${ECONOMIST_OUTPUT_DIR}")
-    if [[ -n "${ECONOMIST_WORK_DIR:-}" && "${ECONOMIST_WORK_DIR}" != "${ECONOMIST_OUTPUT_DIR}" ]]; then
-        _roots_ref+=("${ECONOMIST_WORK_DIR}")
-    fi
+    economist_append_unique_storage_root _roots_ref "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_append_unique_storage_root _roots_ref "${ECONOMIST_WORK_DIR:-}"
+    economist_append_unique_storage_root _roots_ref "${ECONOMIST_ARCHIVE_DIR:-}"
+}
+
+economist_edition_active_storage_roots() {
+    local -n _roots_ref="$1"
+
+    _roots_ref=()
+    economist_append_unique_storage_root _roots_ref "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_append_unique_storage_root _roots_ref "${ECONOMIST_WORK_DIR:-}"
 }
 
 economist_edition_dir_for_root() {
@@ -657,7 +680,7 @@ economist_edition_placeholder_dir_exists() {
     local iso="$1" root=""
 
     local -a roots=()
-    economist_edition_storage_roots roots
+    economist_edition_active_storage_roots roots
     for root in "${roots[@]}"; do
         [[ -d "$(economist_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)" ]] && return 0
         [[ -d "$(economist_legacy_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)" ]] && return 0
@@ -676,14 +699,6 @@ economist_append_edition_dir_candidates_for_iso() {
         economist_append_unique_dir_candidate _candidates_ref "$(economist_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
         economist_append_unique_dir_candidate _candidates_ref "$(economist_legacy_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
     done
-}
-
-economist_dir_has_listable_content() {
-    local dir="$1"
-
-    [[ -d "${dir}" ]] || return 1
-    [[ -n "$(ls -A "${dir}" 2>/dev/null)" ]] && return 0
-    [[ "$(find "${dir}" -mindepth 1 -print -quit 2>/dev/null)" != "" ]]
 }
 
 economist_append_unique_dir_candidate() {
@@ -720,34 +735,40 @@ economist_collect_processed_edition_dir_candidates() {
         economist_append_edition_dir_candidates_for_iso "${alt_iso}" _candidates_ref
     fi
 
-    if [[ "${issue_no}" =~ ^[0-9]+$ ]]; then
-        local -a roots=()
-        economist_edition_storage_roots roots
-        shopt -s nullglob
-        for root in "${roots[@]}"; do
-            for candidate in "${root}"/*_TheEconomist; do
-                [[ -d "${candidate}" ]] || continue
-                basename="$(basename "${candidate}")"
-                date_iso="$(economist_edition_iso_from_dir_basename "${basename}" 2>/dev/null || true)"
-                [[ -n "${date_iso}" ]] || continue
+    local -a roots=()
+    economist_edition_storage_roots roots
+    shopt -s nullglob
+    for root in "${roots[@]}"; do
+        for candidate in "${root}"/*_TheEconomist; do
+            [[ -d "${candidate}" ]] || continue
+            basename="$(basename "${candidate}")"
+            date_iso="$(economist_edition_iso_from_dir_basename "${basename}" 2>/dev/null || true)"
+            dir_issue=""
+            if [[ -n "${date_iso}" ]]; then
+                if [[ "${date_iso}" == "${iso}" ]] \
+                    || [[ -n "${alt_iso}" && "${date_iso}" == "${alt_iso}" ]]; then
+                    economist_append_unique_dir_candidate _candidates_ref "${candidate}"
+                fi
                 dir_issue="$(economist_issue_number_for_edition_date "${date_iso}" 2>/dev/null || true)"
-                [[ "${dir_issue}" == "${issue_no}" ]] || continue
+            fi
+            if [[ "${issue_no}" =~ ^[0-9]+$ && "${dir_issue}" == "${issue_no}" ]]; then
                 economist_append_unique_dir_candidate _candidates_ref "${candidate}"
-            done
+            fi
         done
-        shopt -u nullglob
-    fi
+    done
+    shopt -u nullglob
 }
 
 economist_resolve_processed_edition_dir() {
     local iso="$1" alt_iso="${2:-}" issue_no="${3:-}"
     local -a candidates=()
-    local candidate="" best="" best_bytes=0 bytes=0
+    local candidate="" best="" best_bytes=0 bytes=0 min_bytes=0
 
+    min_bytes="$(economist_min_processed_edition_bytes)"
     economist_collect_processed_edition_dir_candidates "${iso}" "${alt_iso}" "${issue_no}" candidates
 
     for candidate in "${candidates[@]}"; do
-        economist_dir_has_listable_content "${candidate}" || continue
+        [[ -d "${candidate}" ]] || continue
         bytes="$(economist_dir_size_bytes "${candidate}")"
         if (( bytes > best_bytes )); then
             best="${candidate}"
@@ -755,17 +776,10 @@ economist_resolve_processed_edition_dir() {
         fi
     done
 
-    if (( best_bytes > 0 )); then
+    if (( best_bytes >= min_bytes )); then
         echo "${best}"
         return 0
     fi
-
-    for candidate in "${candidates[@]}"; do
-        if economist_dir_has_listable_content "${candidate}"; then
-            echo "${candidate}"
-            return 0
-        fi
-    done
 
     return 1
 }
@@ -1002,7 +1016,7 @@ economist_format_age_from_today() {
 }
 
 economist_dir_size_bytes() {
-    local dir="$1" bytes=""
+    local dir="$1" bytes="" blocks=0
 
     [[ -n "${dir}" && -d "${dir}" ]] || {
         echo "0"
@@ -1010,13 +1024,30 @@ economist_dir_size_bytes() {
     }
 
     bytes="$(du -sb "${dir}" 2>/dev/null | awk '{print $1}')"
-    if [[ ! "${bytes:-0}" =~ ^[0-9]+$ ]] || (( bytes == 0 )); then
-        bytes="$(find "${dir}" -type f -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {print s+0}')"
+    if [[ "${bytes:-0}" =~ ^[0-9]+$ ]] && (( bytes > 0 )); then
+        echo "${bytes}"
+        return 0
     fi
-    if [[ ! "${bytes:-0}" =~ ^[0-9]+$ ]]; then
-        bytes="0"
+
+    bytes="$(find "${dir}" -type f -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {print s+0}')"
+    if [[ "${bytes:-0}" =~ ^[0-9]+$ ]] && (( bytes > 0 )); then
+        echo "${bytes}"
+        return 0
     fi
-    echo "${bytes}"
+
+    bytes="$(find "${dir}" -type f -exec stat -c '%s' {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')"
+    if [[ "${bytes:-0}" =~ ^[0-9]+$ ]] && (( bytes > 0 )); then
+        echo "${bytes}"
+        return 0
+    fi
+
+    blocks="$(du -sk "${dir}" 2>/dev/null | awk '{print $1}')"
+    if [[ "${blocks:-0}" =~ ^[0-9]+$ ]] && (( blocks > 0 )); then
+        echo $(( blocks * 1024 ))
+        return 0
+    fi
+
+    echo "0"
 }
 
 economist_format_bytes_all_units() {
