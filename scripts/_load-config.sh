@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.082501 - detect processed via mp3/rar; sat_iso in pipeline skip; clean empty shells
 # v. 20260716.234001 - scan archive dir; size threshold; robust dir size; match all folders
 # v. 20260716.233501 - show-available: also scan ECONOMIST_WORK_DIR for edition folders
 # v. 20260716.233001 - size: pick largest output dir; GB %8.2f; unified processed status
@@ -630,6 +631,60 @@ economist_local_edition_status_for_iso() {
     echo "not downloaded"
 }
 
+economist_sat_iso_for_edition_iso() {
+    local iso="$1" rss_file="" pos=""
+
+    [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+
+    rss_file="$(mktemp)"
+    if economist_rss_fetch_to "${rss_file}"; then
+        pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+        if [[ -n "${pos}" ]]; then
+            economist_edition_date_for_rss_position "${pos}"
+            rm -f "${rss_file}"
+            return 0
+        fi
+    fi
+    rm -f "${rss_file}"
+    return 1
+}
+
+economist_edition_dir_has_processed_content() {
+    local dir="$1" bytes=0 min_bytes=""
+
+    [[ -d "${dir}" ]] || return 1
+
+    if [[ -n "$(find "${dir}" -type f \( -name '*.mp3' -o -name '*.m4a' -o -name '*.aac' \) \
+        -size +100k -print -quit 2>/dev/null)" ]]; then
+        return 0
+    fi
+    if [[ -f "${dir}/_org_file.rar" || -f "${dir}/_org_mp3_files_NO_speechnorm_NO_speedup.rar" ]]; then
+        return 0
+    fi
+
+    min_bytes="$(economist_min_processed_edition_bytes)"
+    bytes="$(economist_dir_size_bytes "${dir}")"
+    (( bytes >= min_bytes ))
+}
+
+economist_remove_empty_edition_placeholders_for_iso() {
+    local iso="$1" root="" path=""
+
+    local -a roots=()
+    economist_edition_active_storage_roots roots
+    for root in "${roots[@]}"; do
+        for path in \
+            "$(economist_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)" \
+            "$(economist_legacy_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"; do
+            [[ -d "${path}" ]] || continue
+            economist_edition_dir_has_processed_content "${path}" && continue
+            if [[ -z "$(ls -A "${path}" 2>/dev/null)" ]]; then
+                rmdir "${path}" 2>/dev/null || true
+            fi
+        done
+    done
+}
+
 economist_min_processed_edition_bytes() {
     echo 1000000
 }
@@ -762,13 +817,13 @@ economist_collect_processed_edition_dir_candidates() {
 economist_resolve_processed_edition_dir() {
     local iso="$1" alt_iso="${2:-}" issue_no="${3:-}"
     local -a candidates=()
-    local candidate="" best="" best_bytes=0 bytes=0 min_bytes=0
+    local candidate="" best="" best_bytes=0 bytes=0
 
-    min_bytes="$(economist_min_processed_edition_bytes)"
     economist_collect_processed_edition_dir_candidates "${iso}" "${alt_iso}" "${issue_no}" candidates
 
     for candidate in "${candidates[@]}"; do
         [[ -d "${candidate}" ]] || continue
+        economist_edition_dir_has_processed_content "${candidate}" || continue
         bytes="$(economist_dir_size_bytes "${candidate}")"
         if (( bytes > best_bytes )); then
             best="${candidate}"
@@ -776,7 +831,7 @@ economist_resolve_processed_edition_dir() {
         fi
     done
 
-    if (( best_bytes >= min_bytes )); then
+    if [[ -n "${best}" ]]; then
         echo "${best}"
         return 0
     fi
@@ -929,7 +984,8 @@ economist_check_new_edition_for_run() {
     fi
 
     issue_no="$(economist_issue_number_for_edition_date "${_resolved_iso_ref}" 2>/dev/null || echo "—")"
-    status="$(economist_local_edition_status_for_iso "${_resolved_iso_ref}" "" "${issue_no}")"
+    sat_iso="$(economist_sat_iso_for_edition_iso "${_resolved_iso_ref}" 2>/dev/null || true)"
+    status="$(economist_local_edition_status_for_iso "${_resolved_iso_ref}" "${sat_iso}" "${issue_no}")"
 
     if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 ]]; then
         echo

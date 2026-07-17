@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.082501 - pass sat_iso to processed-edition check before download
 # v. 20260716.233501 - detect processed editions in work dir as well as output dir
 # v. 20260716.162603 - orchestrate full pipeline with healthcheck pings
 # Orchestrates the full Economist weekly audio pipeline with healthcheck pings.
@@ -255,7 +256,8 @@ ECONOMIST_PIPELINE_EDITION_DIR="${edition_directory}"
 ECONOMIST_PIPELINE_EDITION_NAME="${edition_name}"
 
 status_issue_no="$(economist_issue_number_for_edition_date "${resolved_edition_iso}" 2>/dev/null || true)"
-status_dir="$(economist_resolve_processed_edition_dir "${resolved_edition_iso}" "" "${status_issue_no}" 2>/dev/null || true)"
+status_sat_iso="$(economist_sat_iso_for_edition_iso "${resolved_edition_iso}" 2>/dev/null || true)"
+status_dir="$(economist_resolve_processed_edition_dir "${resolved_edition_iso}" "${status_sat_iso}" "${status_issue_no}" 2>/dev/null || true)"
 if [[ -n "${status_dir}" ]]; then
     if [[ "${ECONOMIST_FORCE_REPROCESS:-0}" == 1 ]]; then
         echo "Force reprocess — removing existing edition output and work files..."
@@ -263,7 +265,8 @@ if [[ -n "${status_dir}" ]]; then
     else
         log_part1=$(
             echo
-            echo "Directory ${status_dir} exists and is not empty"
+            echo "Edition ${resolved_edition_iso} (issue ${status_issue_no}) is already processed:"
+            echo "  ${status_dir}"
             echo "Will not download this edition again..."
             echo "... exiting."
         )
@@ -273,6 +276,8 @@ if [[ -n "${status_dir}" ]]; then
         economist_exit_pipeline 0
     fi
 fi
+
+economist_remove_empty_edition_placeholders_for_iso "${resolved_edition_iso}"
 
 mkdir -p "${edition_directory}" 2>/dev/null
 cd "${edition_directory}"
