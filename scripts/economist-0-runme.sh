@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.124801 - abort if resolved edition not in RSS; log resolved date
 # v. 20260717.124401 - print validated config block before RSS/edition checks
 # v. 20260717.124001 - browse nearby editions when user explicitly declines nearest
 # v. 20260717.123001 - status messages while fetching/checking RSS
@@ -277,7 +278,16 @@ fi
 latest_edition="https://www.economist.com/weeklyedition/${resolved_edition_iso}"
 args=("${resolved_edition_iso}")
 
+log_kv "Resolved edition (download):" "${resolved_edition_iso}"
 log_kv "RSS edition to download:" "${latest_edition}"
+
+if ! economist_verify_edition_date_on_server "${resolved_edition_iso}"; then
+    echo
+    echo "Resolved edition ${resolved_edition_iso} is not in the RSS feed (no matching title cover date)."
+    echo "Aborting before download."
+    economist_set_run_step edition_not_on_rss
+    economist_exit_pipeline 1
+fi
 
 edition_directory="$(economist_edition_output_dir_for_date "${resolved_edition_iso}")"
 edition_name="$(basename "${edition_directory}")"

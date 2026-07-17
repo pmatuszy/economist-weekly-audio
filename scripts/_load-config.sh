@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.124801 - match editions by RSS title cover date only (fix false verify)
 # v. 20260717.124001 - offer nearby edition list when user explicitly declines nearest
 # v. 20260717.123201 - punctuation on edition-not-found status line
 # v. 20260717.123001 - status messages while fetching/checking RSS
@@ -419,6 +420,17 @@ economist_edition_date_from_rss_title() {
     echo "${iso}"
 }
 
+economist_edition_cover_date_for_rss_item() {
+    local rss_file="$1" pos="$2" title=""
+
+    [[ -n "${rss_file}" && -f "${rss_file}" ]] || return 1
+    [[ "${pos}" =~ ^[0-9]+$ ]] || return 1
+    (( pos >= 1 )) || return 1
+
+    title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+    economist_edition_date_from_rss_title "${title}"
+}
+
 economist_edition_date_for_rss_item() {
     local rss_file="$1" pos="$2" title="" iso=""
 
@@ -445,7 +457,7 @@ economist_rss_position_for_edition_date() {
     (( item_count > 0 )) || return 1
 
     for (( pos = 1; pos <= item_count; ++pos )); do
-        edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+        edition_at_pos="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
         [[ "${edition_at_pos}" == "${iso}" ]] || continue
         echo "${pos}"
         return 0
@@ -1068,7 +1080,7 @@ economist_collect_verified_rss_edition_isos() {
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 [[ -n "${url}" ]] || continue
                 economist_verify_enclosure_on_server "${url}" || continue
-                iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+                iso="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
                 economist_append_unique_iso "${array_name}" "${iso}"
             done
             economist_status_wanted && printf ' done.\n' >&2
@@ -1232,7 +1244,7 @@ economist_rss_build_pick_arrays_for_isos() {
             url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
             [[ -n "${url}" ]] || continue
             economist_verify_enclosure_on_server "${url}" || continue
-            edition_iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+            edition_iso="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
             [[ -n "${filter_map[${edition_iso}]+x}" ]] || continue
 
             title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
@@ -1407,7 +1419,7 @@ economist_verify_edition_date_on_server() {
                 printf 'Checking edition %s on server' "${iso}" >&2
             fi
             for (( pos = 1; pos <= item_count; ++pos )); do
-                edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+                edition_at_pos="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
                 [[ "${edition_at_pos}" == "${iso}" ]] || continue
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 if [[ -n "${url}" ]] && economist_verify_enclosure_on_server "${url}"; then
@@ -1440,7 +1452,7 @@ economist_find_newest_verified_rss_edition() {
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 [[ -n "${url}" ]] || continue
                 economist_verify_enclosure_on_server "${url}" || continue
-                edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
+                edition_at_pos="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
                 found="${edition_at_pos}"
                 break
             done
@@ -1471,8 +1483,10 @@ economist_check_new_edition_for_run() {
         economist_status_msg ""
         economist_status_msg "Checking whether edition ${explicit_iso} is on the RSS server."
         economist_status_msg "Please wait — fetching the feed and verifying files..."
-        _resolved_iso_ref="${explicit_iso}"
-        if ! economist_verify_edition_date_on_server "${explicit_iso}"; then
+        _resolved_iso_ref=""
+        if economist_verify_edition_date_on_server "${explicit_iso}"; then
+            _resolved_iso_ref="${explicit_iso}"
+        else
             nearest_iso=""
             nearest_prompt_rc=0
             picked_nearby=""
@@ -1833,7 +1847,7 @@ economist_show_and_pick_available_editions() {
         fi
 
         title="$(economist_rss_item_title_at "${_economist_rss_tmp}" "${pos}")"
-        edition_iso="$(economist_edition_date_for_rss_item "${_economist_rss_tmp}" "${pos}")" || continue
+        edition_iso="$(economist_edition_cover_date_for_rss_item "${_economist_rss_tmp}" "${pos}")" || continue
         sat_iso="$(economist_edition_date_for_rss_position "${pos}")"
         issue_no="$(economist_issue_number_for_edition_date "${edition_iso}" 2>/dev/null || echo "—")"
         processed_dir="$(economist_resolve_processed_edition_dir "${edition_iso}" "${sat_iso}" "${issue_no}" 2>/dev/null || true)"
