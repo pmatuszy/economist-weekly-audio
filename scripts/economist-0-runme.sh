@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - abort if resolved edition not in RSS; log resolved date
 # v. 20260717.124401 - print validated config block before RSS/edition checks
 # v. 20260717.124001 - browse nearby editions when user explicitly declines nearest
@@ -273,6 +274,12 @@ else
         echo "Cannot determine edition date." >&2
         economist_exit_pipeline 1
     fi
+fi
+
+if [[ -z "${resolved_edition_iso}" ]]; then
+    echo "No edition to download." >&2
+    economist_set_run_step pipeline_confirm_quit
+    economist_finish_run 1
 fi
 
 latest_edition="https://www.economist.com/weeklyedition/${resolved_edition_iso}"

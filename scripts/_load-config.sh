@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - match editions by RSS title cover date only (fix false verify)
 # v. 20260717.124001 - offer nearby edition list when user explicitly declines nearest
 # v. 20260717.123201 - punctuation on edition-not-found status line
@@ -1131,18 +1132,18 @@ economist_nearest_verified_rss_edition_iso() {
 
 economist_window_verified_isos_around() {
     local requested_iso="$1"
-    local -n _available_ref="$2"
-    local -n _window_ref="$3"
+    local -n _available_arr_ref="$2"
+    local -n _window_arr_ref="$3"
     local before_count="${4:-5}" after_count="${5:-5}"
     local -a sorted=() before=() after=()
     local req_epoch=0 iso_epoch=0 iso="" idx=0 before_start=0 end=0
 
-    _window_ref=()
+    _window_arr_ref=()
     [[ "${requested_iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
-    (( ${#_available_ref[@]} > 0 )) || return 1
+    (( ${#_available_arr_ref[@]} > 0 )) || return 1
 
     req_epoch="$(date -d "${requested_iso}" +%s)"
-    mapfile -t sorted < <(printf '%s\n' "${_available_ref[@]}" | LC_ALL=C sort -u)
+    mapfile -t sorted < <(printf '%s\n' "${_available_arr_ref[@]}" | LC_ALL=C sort -u)
 
     for iso in "${sorted[@]}"; do
         [[ -n "${iso}" ]] || continue
@@ -1160,7 +1161,7 @@ economist_window_verified_isos_around() {
         before_start=$((${#before[@]} - before_count))
     fi
     for (( idx=before_start; idx < ${#before[@]}; ++idx )); do
-        _window_ref+=("${before[idx]}")
+        _window_arr_ref+=("${before[idx]}")
     done
 
     end=${#after[@]}
@@ -1168,10 +1169,10 @@ economist_window_verified_isos_around() {
         end="${after_count}"
     fi
     for (( idx=0; idx < end; ++idx )); do
-        _window_ref+=("${after[idx]}")
+        _window_arr_ref+=("${after[idx]}")
     done
 
-    (( ${#_window_ref[@]} > 0 ))
+    (( ${#_window_arr_ref[@]} > 0 ))
 }
 
 economist_reverse_pick_arrays() {
@@ -1271,19 +1272,25 @@ economist_rss_build_pick_arrays_for_isos() {
     economist_rss_temp_rm "${rss_file}"
 
     (( ${#_pick_isos_ref[@]} > 0 )) || return 1
-    economist_reverse_pick_arrays \
-        _pick_isos_ref _pick_titles_ref _pick_local_ref _pick_issues_ref _pick_sat_isos_ref _pick_dirs_ref
+    economist_reverse_pick_arrays "$2" "$3" "$4" "$5" "$6" "$7"
 }
 
 economist_interactive_select_from_pick_arrays() {
-    local -n _picked_iso_ref="$1"
-    local -n _pick_isos_ref="$2"
-    local -n _pick_titles_ref="$3"
-    local -n _pick_local_ref="$4"
-    local -n _pick_issues_ref="$5"
-    local -n _pick_sat_isos_ref="$6"
-    local -n _pick_dirs_ref="$7"
+    local picked_array_name="$1"
+    local isos_array_name="$2"
+    local titles_array_name="$3"
+    local local_array_name="$4"
+    local issues_array_name="$5"
+    local sat_isos_array_name="$6"
+    local dirs_array_name="$7"
     local list_heading="$8"
+    local -n _picked_iso_ref="${picked_array_name}"
+    local -n _pick_isos_ref="${isos_array_name}"
+    local -n _pick_titles_ref="${titles_array_name}"
+    local -n _pick_local_ref="${local_array_name}"
+    local -n _pick_issues_ref="${issues_array_name}"
+    local -n _pick_sat_isos_ref="${sat_isos_array_name}"
+    local -n _pick_dirs_ref="${dirs_array_name}"
     local choice="" sel_idx=0
 
     _picked_iso_ref=""
@@ -1296,7 +1303,8 @@ economist_interactive_select_from_pick_arrays() {
         echo
         echo "${list_heading}"
         economist_show_available_print_editions \
-            _pick_isos_ref _pick_titles_ref _pick_local_ref _pick_issues_ref _pick_sat_isos_ref _pick_dirs_ref
+            "${isos_array_name}" "${titles_array_name}" "${local_array_name}" \
+            "${issues_array_name}" "${sat_isos_array_name}" "${dirs_array_name}"
         echo
 
         while true; do
@@ -1346,13 +1354,15 @@ economist_prompt_browse_editions_near_date() {
 
 economist_pick_edition_window_around_date() {
     local requested_iso="$1"
-    local -n _available_ref="$2"
-    local -n _picked_iso_ref="$3"
+    local available_array_name="$2"
+    local picked_array_name="$3"
+    local -n _available_ref="${available_array_name}"
+    local -n _picked_iso_ref="${picked_array_name}"
     local -a window_isos=() pick_isos=() pick_titles=() pick_local=() pick_issues=() pick_sat_isos=() pick_dirs=()
 
     _picked_iso_ref=""
 
-    if ! economist_window_verified_isos_around "${requested_iso}" _available_ref window_isos; then
+    if ! economist_window_verified_isos_around "${requested_iso}" "${available_array_name}" window_isos; then
         echo "No other verified editions near ${requested_iso}."
         return 1
     fi
@@ -1371,7 +1381,7 @@ economist_pick_edition_window_around_date() {
     fi
 
     economist_interactive_select_from_pick_arrays \
-        _picked_iso_ref \
+        "${picked_array_name}" \
         pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs \
         "Verified editions near ${requested_iso} (oldest at top; #1 = newest at bottom):"
 }
@@ -1547,6 +1557,11 @@ economist_check_new_edition_for_run() {
         echo
         echo "No new edition — ${_resolved_iso_ref} (issue ${issue_no}) is already processed."
         economist_force_redownload_hint
+        return 1
+    fi
+
+    if [[ -z "${_resolved_iso_ref}" ]]; then
+        echo "No edition selected." >&2
         return 1
     fi
 
