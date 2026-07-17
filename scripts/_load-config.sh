@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.083901 - fix nameref bugs breaking edition dir / archive detection
 # v. 20260717.082501 - detect processed via mp3/rar; sat_iso in pipeline skip; clean empty shells
 # v. 20260716.234001 - scan archive dir; size threshold; robust dir size; match all folders
 # v. 20260716.233501 - show-available: also scan ECONOMIST_WORK_DIR for edition folders
@@ -690,31 +691,34 @@ economist_min_processed_edition_bytes() {
 }
 
 economist_append_unique_storage_root() {
-    local -n _roots_ref="$1"
+    local array_name="$1"
+    local -n _arr_ref="${array_name}"
     local root="$2" existing=""
 
     [[ -n "${root}" ]] || return 0
-    for existing in "${_roots_ref[@]}"; do
+    for existing in "${_arr_ref[@]}"; do
         [[ "${existing}" == "${root}" ]] && return 0
     done
-    _roots_ref+=("${root}")
+    _arr_ref+=("${root}")
 }
 
 economist_edition_storage_roots() {
-    local -n _roots_ref="$1"
+    local array_name="$1"
+    local -n _roots_ref="${array_name}"
 
     _roots_ref=()
-    economist_append_unique_storage_root _roots_ref "${ECONOMIST_OUTPUT_DIR:-}"
-    economist_append_unique_storage_root _roots_ref "${ECONOMIST_WORK_DIR:-}"
-    economist_append_unique_storage_root _roots_ref "${ECONOMIST_ARCHIVE_DIR:-}"
+    economist_append_unique_storage_root "${array_name}" "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_append_unique_storage_root "${array_name}" "${ECONOMIST_WORK_DIR:-}"
+    economist_append_unique_storage_root "${array_name}" "${ECONOMIST_ARCHIVE_DIR:-}"
 }
 
 economist_edition_active_storage_roots() {
-    local -n _roots_ref="$1"
+    local array_name="$1"
+    local -n _roots_ref="${array_name}"
 
     _roots_ref=()
-    economist_append_unique_storage_root _roots_ref "${ECONOMIST_OUTPUT_DIR:-}"
-    economist_append_unique_storage_root _roots_ref "${ECONOMIST_WORK_DIR:-}"
+    economist_append_unique_storage_root "${array_name}" "${ECONOMIST_OUTPUT_DIR:-}"
+    economist_append_unique_storage_root "${array_name}" "${ECONOMIST_WORK_DIR:-}"
 }
 
 economist_edition_dir_for_root() {
@@ -745,35 +749,37 @@ economist_edition_placeholder_dir_exists() {
 
 economist_append_edition_dir_candidates_for_iso() {
     local iso="$1"
-    local -n _candidates_ref="$2"
+    local candidates_name="$2"
+    local -n _candidates_ref="${candidates_name}"
     local root=""
 
     local -a roots=()
     economist_edition_storage_roots roots
     for root in "${roots[@]}"; do
-        economist_append_unique_dir_candidate _candidates_ref "$(economist_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
-        economist_append_unique_dir_candidate _candidates_ref "$(economist_legacy_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
+        economist_append_unique_dir_candidate "${candidates_name}" "$(economist_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
+        economist_append_unique_dir_candidate "${candidates_name}" "$(economist_legacy_edition_dir_for_root "${iso}" "${root}" 2>/dev/null || true)"
     done
 }
 
 economist_append_unique_dir_candidate() {
-    local -n _candidates_ref="$1"
+    local array_name="$1"
+    local -n _arr_ref="${array_name}"
     local candidate="$2" existing=""
 
     [[ -n "${candidate}" && -d "${candidate}" ]] || return 0
-    for existing in "${_candidates_ref[@]}"; do
+    for existing in "${_arr_ref[@]}"; do
         [[ "${existing}" == "${candidate}" ]] && return 0
     done
-    _candidates_ref+=("${candidate}")
+    _arr_ref+=("${candidate}")
 }
 
 economist_collect_processed_edition_dir_candidates() {
-    local iso="$1" alt_iso="${2:-}" issue_no="${3:-}"
-    local -n _candidates_ref="$4"
+    local iso="$1" alt_iso="${2:-}" issue_no="${3:-}" candidates_name="$4"
+    local -n _candidates_ref="${candidates_name}"
     local rss_file="" pos="" candidate="" basename="" date_iso="" dir_issue=""
     local root=""
 
-    economist_append_edition_dir_candidates_for_iso "${iso}" _candidates_ref
+    economist_append_edition_dir_candidates_for_iso "${iso}" "${candidates_name}"
 
     if [[ -z "${alt_iso}" ]]; then
         rss_file="$(mktemp)"
@@ -787,7 +793,7 @@ economist_collect_processed_edition_dir_candidates() {
     fi
 
     if [[ -n "${alt_iso}" ]]; then
-        economist_append_edition_dir_candidates_for_iso "${alt_iso}" _candidates_ref
+        economist_append_edition_dir_candidates_for_iso "${alt_iso}" "${candidates_name}"
     fi
 
     local -a roots=()
@@ -802,12 +808,12 @@ economist_collect_processed_edition_dir_candidates() {
             if [[ -n "${date_iso}" ]]; then
                 if [[ "${date_iso}" == "${iso}" ]] \
                     || [[ -n "${alt_iso}" && "${date_iso}" == "${alt_iso}" ]]; then
-                    economist_append_unique_dir_candidate _candidates_ref "${candidate}"
+                    economist_append_unique_dir_candidate "${candidates_name}" "${candidate}"
                 fi
                 dir_issue="$(economist_issue_number_for_edition_date "${date_iso}" 2>/dev/null || true)"
             fi
             if [[ "${issue_no}" =~ ^[0-9]+$ && "${dir_issue}" == "${issue_no}" ]]; then
-                economist_append_unique_dir_candidate _candidates_ref "${candidate}"
+                economist_append_unique_dir_candidate "${candidates_name}" "${candidate}"
             fi
         done
     done
