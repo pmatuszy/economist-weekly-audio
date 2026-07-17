@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# v. 20260717.122601 - clearer website-vs-RSS explanation when no new edition
+# v. 20260717.120501 - CLI date: config + pick-style confirm before pipeline start
 # v. 20260717.120401 - fix rss temp cleanup under set -u (no local in RETURN trap)
 # v. 20260717.120301 - accept YYYY.MM.DD edition date on command line
 # v. 20260717.090001 - normalize edition date; nearest RSS fallback; force hint
@@ -960,6 +962,33 @@ economist_force_redownload_hint() {
     echo "Use: economist-0-runme.sh --force   (or -f) to re-download and reprocess."
 }
 
+economist_print_website_vs_rss_explanation() {
+    local website_iso="$1"
+
+    [[ -n "${website_iso}" ]] || return 0
+
+    cat <<EOF
+
+------------------------------------------------------------------------
+NOTE: Website cover date is NOT what this script downloads
+------------------------------------------------------------------------
+
+  The Economist website already shows cover date ${website_iso}.
+  (from economist.com/weeklyedition/archive — for information only)
+
+  This script does NOT download from that website page.
+  It uses ONLY the Economist RSS feed.
+  It downloads ONLY editions whose audio file is verified on the server
+  (the same check as --show-available).
+
+  A newer date on the website does NOT mean this run will download it.
+  When RSS has no new verified edition yet, the script stops here.
+
+------------------------------------------------------------------------
+
+EOF
+}
+
 economist_append_unique_iso() {
     local array_name="$1" iso="$2" existing=""
 
@@ -1136,7 +1165,7 @@ economist_check_new_edition_for_run() {
     sat_iso="$(economist_sat_iso_for_edition_iso "${_resolved_iso_ref}" 2>/dev/null || true)"
     status="$(economist_local_edition_status_for_iso "${_resolved_iso_ref}" "${sat_iso}" "${issue_no}")"
 
-    if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 ]]; then
+    if [[ "${status}" == "already processed" && "${force_reprocess}" != 1 && -z "${explicit_iso}" ]]; then
         echo
         echo "No new edition — ${_resolved_iso_ref} (issue ${issue_no}) is already processed."
         economist_force_redownload_hint
@@ -1146,30 +1175,101 @@ economist_check_new_edition_for_run() {
     return 0
 }
 
-economist_prompt_proceed_before_download() {
-    local iso="$1" issue_no="" answer=""
+economist_rss_title_for_edition_iso() {
+    local iso="$1" rss_file="" pos="" title=""
+
+    rss_file="$(mktemp)"
+    if economist_rss_fetch_to "${rss_file}"; then
+        pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+        if [[ -n "${pos}" ]]; then
+            title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+        fi
+    fi
+    economist_rss_temp_rm "${rss_file}"
+    [[ -n "${title}" ]] || return 1
+    echo "${title}"
+}
+
+economist_print_edition_selection_summary() {
+    local iso="$1" sat_iso="" issue_no="" local_status="" processed_dir="" title=""
+
+    sat_iso="$(economist_sat_iso_for_edition_iso "${iso}" 2>/dev/null || true)"
+    issue_no="$(economist_issue_number_for_edition_date "${iso}" 2>/dev/null || echo "—")"
+    processed_dir="$(economist_resolve_processed_edition_dir "${iso}" "${sat_iso}" "${issue_no}" 2>/dev/null || true)"
+    local_status="$(economist_local_edition_status_for_iso "${iso}" "${sat_iso}" "${issue_no}")"
+    title="$(economist_rss_title_for_edition_iso "${iso}" 2>/dev/null || echo "—")"
+
+    printf '  %-12s %s\n' "Edition:" "${iso}"
+    printf '  %-12s %s\n' "Title:" "${title:0:72}"
+    printf '  %-12s %s\n' "Issue:" "${issue_no}"
+    printf '  %-12s %s\n' "Local:" "${local_status}"
+    printf '  %-12s %s\n' "Age:" "$(economist_format_age_from_today "${iso}")"
+    printf '  %-12s %s\n' "Size:" \
+        "$(economist_show_available_edition_size \
+            "${iso}" "${sat_iso}" "${issue_no}" "${processed_dir}")"
+}
+
+# Confirm before download/reprocess (same screen as --show-available pick).
+# Returns: 0 = proceed, 1 = no/back, 2 = quit.
+economist_confirm_edition_before_download() {
+    local iso="$1"
+    local -n _force_reprocess_ref="$2"
+    local answer="" local_status="" prompt=""
 
     if [[ ! -t 0 && ! -r /dev/tty ]]; then
         return 0
     fi
 
-    issue_no="$(economist_issue_number_for_edition_date "${iso}" 2>/dev/null || echo "—")"
+    local_status="$(economist_local_edition_status_for_iso "${iso}")"
+
+    echo
+    economist_print_edition_selection_summary "${iso}"
     echo
     economist_print_config_ok
     echo
-    echo "New edition on the server: ${iso} (issue ${issue_no})."
-    economist_read_tty_char "Proceed with download? [Y/n/q] (10s): " answer 10
+
+    if [[ "${local_status}" == "already processed" ]]; then
+        prompt="Reprocess this edition? [Y/n/q]: "
+    else
+        prompt="Download this edition? [Y/n/q]: "
+    fi
+
+    economist_read_tty_char "${prompt}" answer 10
     case "${answer}" in
-        n|N|q|Q)
+        q|Q)
+            return 2
+            ;;
+        n|N)
             return 1
             ;;
         ''|y|Y)
+            if [[ "${local_status}" == "already processed" ]]; then
+                _force_reprocess_ref=1
+            else
+                _force_reprocess_ref=0
+            fi
             return 0
             ;;
         *)
+            if [[ "${local_status}" == "already processed" ]]; then
+                _force_reprocess_ref=1
+            else
+                _force_reprocess_ref=0
+            fi
             return 0
             ;;
     esac
+}
+
+economist_prompt_proceed_before_download() {
+    local iso="$1" force_flag=0 confirm_rc=0
+
+    economist_confirm_edition_before_download "${iso}" force_flag
+    confirm_rc=$?
+    if (( confirm_rc == 0 )); then
+        return 0
+    fi
+    return 1
 }
 
 economist_force_reprocess_edition() {
@@ -1467,49 +1567,21 @@ economist_show_and_pick_available_editions() {
         done
 
         echo
-        printf '  %-12s %s\n' "Edition:" "${pick_isos[sel_idx]}"
-        printf '  %-12s %s\n' "Title:" "${pick_titles[sel_idx]}"
-        printf '  %-12s %s\n' "Issue:" "${pick_issues[sel_idx]}"
-        printf '  %-12s %s\n' "Local:" "${pick_local[sel_idx]}"
-        printf '  %-12s %s\n' "Age:" "$(economist_format_age_from_today "${pick_isos[sel_idx]}")"
-        printf '  %-12s %s\n' "Size:" \
-            "$(economist_show_available_edition_size \
-                "${pick_isos[sel_idx]}" \
-                "${pick_sat_isos[sel_idx]}" \
-                "${pick_issues[sel_idx]}" \
-                "${pick_dirs[sel_idx]}")"
-        echo
-
-        if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
-            confirm_prompt="Reprocess this edition? [Y/n/q]: "
-        else
-            confirm_prompt="Download this edition? [Y/n/q]: "
-        fi
-
-        while true; do
-            economist_read_tty_char "${confirm_prompt}" confirm
-
-            case "${confirm}" in
-                q|Q)
-                    return 0
-                    ;;
-                n|N)
-                    break
-                    ;;
-                ''|y|Y)
-                    _picked_iso_ref="${pick_isos[sel_idx]}"
-                    if [[ "${pick_local[sel_idx]}" == "already processed" ]]; then
-                        _force_reprocess_ref=1
-                    else
-                        _force_reprocess_ref=0
-                    fi
-                    return 0
-                    ;;
-                *)
-                    echo "Enter Y to confirm, N to show the list again, or Q to quit."
-                    ;;
-            esac
-        done
+        confirm_rc=0
+        economist_confirm_edition_before_download "${pick_isos[sel_idx]}" _force_reprocess_ref
+        confirm_rc=$?
+        case "${confirm_rc}" in
+            0)
+                _picked_iso_ref="${pick_isos[sel_idx]}"
+                return 0
+                ;;
+            2)
+                return 0
+                ;;
+            *)
+                break
+                ;;
+        esac
     done
 }
 
