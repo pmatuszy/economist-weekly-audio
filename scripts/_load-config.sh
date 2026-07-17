@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.130001 - clearer missing-config help (reinstall vs GitHub install.sh)
 # v. 20260717.125501 - default yes on nearby-editions browse prompt
 # v. 20260717.125401 - reuse cached RSS; green nearest row in nearby picker
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
@@ -95,6 +96,44 @@ economist_default_conf_paths() {
     echo "${root}/../github-economist-weekly-audio-private/economist.local.conf"
 }
 
+economist_find_script_reinstall_path() {
+    local script_dir="$1"
+    local base="${profile_location_dir:-$HOME}"
+
+    if [[ -x "${base}/bin/economist-script-reinstall.sh" ]]; then
+        printf '%s\n' "${base}/bin/economist-script-reinstall.sh"
+        return 0
+    fi
+    if [[ -x "${script_dir}/economist-script-reinstall.sh" ]]; then
+        printf '%s\n' "${script_dir}/economist-script-reinstall.sh"
+        return 0
+    fi
+    return 1
+}
+
+economist_print_missing_config_help() {
+    local root="$1" script_dir="$2"
+    local base="${profile_location_dir:-$HOME}"
+    local github_user="${ECONOMIST_GITHUB_USER:-pmatuszy}"
+    local reinstall=""
+
+    reinstall="$(economist_find_script_reinstall_path "${script_dir}" 2>/dev/null || true)"
+
+    echo "Missing economist.local.conf" >&2
+    echo "Options:" >&2
+    if [[ -n "${reinstall}" ]]; then
+        echo "  1) run: ${reinstall} -y" >&2
+        echo "     (git pull github.com/${github_user}/economist-weekly-audio and economist-weekly-audio-private, then install.sh → ${base}/conf/economist.local.conf)" >&2
+    else
+        echo "  1) from GitHub: clone https://github.com/${github_user}/economist-weekly-audio" >&2
+        echo "     cd economist-weekly-audio && ./install.sh" >&2
+        echo "     (needs economist-weekly-audio-private for config; install.sh copies to ${base}/conf/economist.local.conf)" >&2
+    fi
+    echo "  2) manual: cp economist.conf.example economist.local.conf, chmod 600, edit, place under ${base}/conf/ or repo root" >&2
+    echo "  3) clone economist-weekly-audio-private next to this repo (e.g. ${base}/github/economist-weekly-audio-private)" >&2
+    echo "  4) set ECONOMIST_CONF=/path/to/economist.local.conf" >&2
+}
+
 load_economist_config() {
     local conf root script_dir candidate
 
@@ -114,12 +153,7 @@ load_economist_config() {
     fi
 
     if [[ -z "${conf}" || ! -f "${conf}" ]]; then
-        echo "Missing economist.local.conf" >&2
-        echo "Options:" >&2
-        echo "  1) run install.sh to copy config into \${profile_location_dir:-\$HOME}/conf/economist.local.conf" >&2
-        echo "  2) cp economist.conf.example economist.local.conf, chmod 600, and edit" >&2
-        echo "  3) clone economist-weekly-audio-private next to this repo (e.g. \${profile_location_dir:-\$HOME}/github/economist-weekly-audio-private)" >&2
-        echo "  4) set ECONOMIST_CONF=/path/to/economist.local.conf" >&2
+        economist_print_missing_config_help "${root}" "${script_dir}"
         exit 1
     fi
 
