@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.120301 - accept YYYY.MM.DD edition date on command line
 # v. 20260717.090001 - normalize edition date; nearest RSS fallback; force hint
 # v. 20260717.083901 - fix nameref bugs breaking edition dir / archive detection
 # v. 20260717.082501 - detect processed via mp3/rar; sat_iso in pipeline skip; clean empty shells
@@ -928,6 +929,8 @@ economist_normalize_edition_iso() {
 
     if [[ "${input}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
         iso="${input}"
+    elif [[ "${input}" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+        iso="${input//./-}"
     elif [[ "${input}" =~ ^[0-9]{8}$ ]]; then
         y="${input:0:4}"
         m="${input:4:2}"

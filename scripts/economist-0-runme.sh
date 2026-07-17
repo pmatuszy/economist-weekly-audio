@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.120301 - accept YYYY.MM.DD edition date on command line
 # v. 20260717.090001 - --force/-f; YYYYMMDD date; nearest edition fallback
 # v. 20260717.082501 - pass sat_iso to processed-edition check before download
 # v. 20260716.233501 - detect processed editions in work dir as well as output dir
@@ -36,7 +37,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             cat <<EOF
-Usage: $(basename "$0") [options] [YYYY-MM-DD | YYYYMMDD]
+Usage: $(basename "$0") [options] [YYYY-MM-DD | YYYY.MM.DD | YYYYMMDD]
 
 Run the full Economist weekly audio pipeline.
 
@@ -46,7 +47,8 @@ Options:
   --list-available     Alias for --show-available.
   -f, --force          Re-download and reprocess even if the edition already exists.
   YYYY-MM-DD           Download a specific edition cover date (e.g. 2026-07-18).
-  YYYYMMDD             Same date without dashes (e.g. 20260718).
+  YYYY.MM.DD           Same with dots (e.g. 2026.07.18).
+  YYYYMMDD             Same without separators (e.g. 20260718).
 
 If the requested date is not on the RSS server, the nearest verified edition is
 suggested interactively (default: no).
@@ -86,7 +88,7 @@ if (( ${#raw_date_args[@]} == 1 )); then
     normalized_edition_iso=""
     if ! normalized_edition_iso="$(economist_normalize_edition_iso "${raw_date_args[0]}")"; then
         echo "Invalid edition date: ${raw_date_args[0]}" >&2
-        echo "Expected YYYY-MM-DD (e.g. 2026-07-18) or YYYYMMDD (e.g. 20260718)." >&2
+        echo "Expected YYYY-MM-DD, YYYY.MM.DD, or YYYYMMDD (e.g. 2026-07-18)." >&2
         exit 1
     fi
     edition_date_args=("${normalized_edition_iso}")
