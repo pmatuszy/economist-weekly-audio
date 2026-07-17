@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.123001 - status messages while fetching/checking RSS
 # v. 20260717.122601 - clearer website-vs-RSS explanation when no new edition
 # v. 20260717.120501 - CLI date: config + pick-style confirm before pipeline start
 # v. 20260717.120401 - fix rss temp cleanup under set -u (no local in RETURN trap)
@@ -538,6 +539,48 @@ economist_rss_fetch_to() {
     curl -fsSL "${ECONOMIST_RSS_URL}" -o "${dest}"
 }
 
+economist_status_wanted() {
+    [[ -t 0 ]] || [[ -r /dev/tty ]]
+}
+
+economist_status_msg() {
+    economist_status_wanted || return 0
+    printf '%s\n' "$*" >&2
+}
+
+economist_rss_fetch_with_progress() {
+    local dest="$1" dots_pid=0 item_count=0 rc=0
+
+    if economist_status_wanted; then
+        printf 'Fetching RSS feed' >&2
+        (
+            while true; do
+                printf '.' >&2
+                sleep 0.4
+            done
+        ) &
+        dots_pid=$!
+    fi
+
+    if economist_rss_fetch_to "${dest}"; then
+        rc=0
+    else
+        rc=1
+    fi
+
+    if (( dots_pid > 0 )); then
+        kill "${dots_pid}" 2>/dev/null || true
+        wait "${dots_pid}" 2>/dev/null || true
+        if (( rc == 0 )); then
+            item_count="$(economist_rss_item_count "${dest}")"
+            printf ' ok (%s item(s)).\n' "${item_count}" >&2
+        else
+            printf ' failed.\n' >&2
+        fi
+    fi
+    return "${rc}"
+}
+
 economist_rss_item_count() {
     local rss_file="$1" item_count=0 item_count_raw
 
@@ -1007,16 +1050,21 @@ economist_collect_verified_rss_edition_isos() {
 
     _isos_ref=()
     rss_file="$(mktemp)"
-    if economist_rss_fetch_to "${rss_file}"; then
+    if economist_rss_fetch_with_progress "${rss_file}"; then
         item_count="$(economist_rss_item_count "${rss_file}")"
         if (( item_count > 0 )); then
+            if economist_status_wanted; then
+                printf 'Checking %s feed item(s) on server' "${item_count}" >&2
+            fi
             for (( pos = 1; pos <= item_count; ++pos )); do
+                economist_status_wanted && printf '.' >&2
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 [[ -n "${url}" ]] || continue
                 economist_verify_enclosure_on_server "${url}" || continue
                 iso="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
                 economist_append_unique_iso "${array_name}" "${iso}"
             done
+            economist_status_wanted && printf ' done.\n' >&2
         fi
     fi
     economist_rss_temp_rm "${rss_file}"
@@ -1086,18 +1134,25 @@ economist_verify_edition_date_on_server() {
     [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
 
     rss_file="$(mktemp)"
-    if economist_rss_fetch_to "${rss_file}"; then
+    if economist_rss_fetch_with_progress "${rss_file}"; then
         item_count="$(economist_rss_item_count "${rss_file}")"
         if (( item_count > 0 )); then
+            if economist_status_wanted; then
+                printf 'Checking edition %s on server' "${iso}" >&2
+            fi
             for (( pos = 1; pos <= item_count; ++pos )); do
                 edition_at_pos="$(economist_edition_date_for_rss_item "${rss_file}" "${pos}")" || continue
                 [[ "${edition_at_pos}" == "${iso}" ]] || continue
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 if [[ -n "${url}" ]] && economist_verify_enclosure_on_server "${url}"; then
+                    economist_status_wanted && printf ' ok.\n' >&2
                     rc=0
                     break
                 fi
             done
+            if (( rc != 0 )) && economist_status_wanted; then
+                printf ' not found.\n' >&2
+            fi
         fi
     fi
     economist_rss_temp_rm "${rss_file}"
@@ -1108,10 +1163,14 @@ economist_find_newest_verified_rss_edition() {
     local rss_file="" pos=0 item_count=0 url="" edition_at_pos="" found=""
 
     rss_file="$(mktemp)"
-    if economist_rss_fetch_to "${rss_file}"; then
+    if economist_rss_fetch_with_progress "${rss_file}"; then
         item_count="$(economist_rss_item_count "${rss_file}")"
         if (( item_count > 0 )); then
+            if economist_status_wanted; then
+                printf 'Checking feed for newest verified edition' >&2
+            fi
             for (( pos = 1; pos <= item_count; ++pos )); do
+                economist_status_wanted && printf '.' >&2
                 url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
                 [[ -n "${url}" ]] || continue
                 economist_verify_enclosure_on_server "${url}" || continue
@@ -1119,6 +1178,13 @@ economist_find_newest_verified_rss_edition() {
                 found="${edition_at_pos}"
                 break
             done
+            if economist_status_wanted; then
+                if [[ -n "${found}" ]]; then
+                    printf ' ok (%s).\n' "${found}" >&2
+                else
+                    printf ' none verified.\n' >&2
+                fi
+            fi
         fi
     fi
     economist_rss_temp_rm "${rss_file}"
@@ -1134,9 +1200,14 @@ economist_check_new_edition_for_run() {
     _resolved_iso_ref=""
 
     if [[ -n "${explicit_iso}" ]]; then
+        economist_status_msg ""
+        economist_status_msg "Checking whether edition ${explicit_iso} is on the RSS server."
+        economist_status_msg "Please wait — fetching the feed and verifying files..."
         _resolved_iso_ref="${explicit_iso}"
         if ! economist_verify_edition_date_on_server "${explicit_iso}"; then
             nearest_iso=""
+            economist_status_msg ""
+            economist_status_msg "Searching for the nearest verified edition (checking all RSS items)..."
             if economist_nearest_verified_rss_edition_iso "${explicit_iso}" nearest_iso \
                 && [[ -n "${nearest_iso}" ]]; then
                 if economist_prompt_nearest_edition_fallback "${explicit_iso}" "${nearest_iso}"; then
@@ -1154,6 +1225,9 @@ economist_check_new_edition_for_run() {
             fi
         fi
     else
+        economist_status_msg ""
+        economist_status_msg "Checking RSS feed for the newest verified edition..."
+        economist_status_msg "Please wait — fetching the feed and verifying files..."
         if ! _resolved_iso_ref="$(economist_find_newest_verified_rss_edition)"; then
             echo
             echo "No new Economist edition on the server (nothing verified in the RSS feed)."
@@ -1221,6 +1295,9 @@ economist_confirm_edition_before_download() {
     fi
 
     local_status="$(economist_local_edition_status_for_iso "${iso}")"
+
+    economist_status_msg ""
+    economist_status_msg "Please wait — loading edition summary from RSS..."
 
     echo
     economist_print_edition_selection_summary "${iso}"
@@ -1440,38 +1517,23 @@ economist_show_and_pick_available_editions() {
     _economist_rss_tmp="$(mktemp)"
     trap 'economist_rss_temp_end' RETURN
 
-    printf 'Fetching RSS feed' >&2
-    (
-        while true; do
-            printf '.' >&2
-            sleep 0.4
-        done
-    ) &
-    dots_pid=$!
-
-    if ! economist_rss_fetch_to "${_economist_rss_tmp}"; then
-        kill "${dots_pid}" 2>/dev/null || true
-        wait "${dots_pid}" 2>/dev/null || true
-        printf ' failed.\n' >&2
+    if ! economist_rss_fetch_with_progress "${_economist_rss_tmp}"; then
         echo "Failed to fetch RSS: ${ECONOMIST_RSS_URL}" >&2
         return 1
     fi
 
-    kill "${dots_pid}" 2>/dev/null || true
-    wait "${dots_pid}" 2>/dev/null || true
-
     item_count="$(economist_rss_item_count "${_economist_rss_tmp}")"
     if [[ "${item_count}" -eq 0 ]]; then
-        printf ' done (no items).\n' >&2
         echo "No items found in RSS feed." >&2
         return 1
     fi
 
-    printf ' ok (%s item(s)).\n' "${item_count}" >&2
-    printf 'Checking %s feed item(s) on server' "${item_count}" >&2
+    if economist_status_wanted; then
+        printf 'Checking %s feed item(s) on server' "${item_count}" >&2
+    fi
 
     for (( pos = 1; pos <= item_count; ++pos )); do
-        printf '.' >&2
+        economist_status_wanted && printf '.' >&2
         url="$(economist_rss_enclosure_url_at "${_economist_rss_tmp}" "${pos}" 2>/dev/null || true)"
         [[ -n "${url}" ]] || continue
         if ! economist_verify_enclosure_on_server "${url}"; then
