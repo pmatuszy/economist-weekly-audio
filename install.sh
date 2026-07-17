@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.221601 - fix bash syntax: quote -> in case patterns
 # v. 20260717.221501 - install plan: dedicated = column between Installed and Repository
 # v. 20260717.221401 - highlight script install plan when updates are pending
 # v. 20260716.230201 - align v. prefix in Was/Now install columns
@@ -296,7 +297,7 @@ economist_install_plan_count_changes() {
             +)
                 ((_new_ref++))
                 ;;
-            ->)
+            '->')
                 ((_update_ref++))
                 ;;
             *)
@@ -338,7 +339,7 @@ economist_print_script_install_marker_styled() {
             printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
             install_tty_reset
             ;;
-        ->)
+        '->')
             install_tty_emit $'\033[1;33m'
             printf '%-*s' "${SCRIPT_INSTALL_MARKER_WIDTH}" "${marker}"
             install_tty_reset
