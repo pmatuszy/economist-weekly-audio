@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.125401 - reuse cached RSS; green nearest row in nearby picker
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - match editions by RSS title cover date only (fix false verify)
 # v. 20260717.124001 - offer nearby edition list when user explicitly declines nearest
@@ -548,6 +549,80 @@ economist_rss_temp_end() {
     _economist_rss_tmp=""
 }
 
+economist_rss_cache_active() {
+    [[ -n "${_economist_rss_tmp:-}" && -f "${_economist_rss_tmp}" ]]
+}
+
+economist_rss_cache_path() {
+    economist_rss_cache_active || return 1
+    printf '%s\n' "${_economist_rss_tmp}"
+}
+
+economist_rss_cache_begin() {
+    if economist_rss_cache_active; then
+        return 0
+    fi
+    economist_rss_temp_end
+    _economist_rss_tmp="$(mktemp)"
+    if ! economist_rss_fetch_with_progress "${_economist_rss_tmp}"; then
+        economist_rss_temp_end
+        return 1
+    fi
+    return 0
+}
+
+economist_rss_cache_end() {
+    economist_rss_temp_end
+}
+
+economist_rss_resolve_file() {
+    local -n _rss_file_ref="$1"
+    local fetch_if_missing="${2:-1}"
+    local -n _owned_ref="$3"
+
+    _rss_file_ref=""
+    _owned_ref=0
+    if economist_rss_cache_path >/dev/null 2>&1; then
+        _rss_file_ref="$(economist_rss_cache_path)"
+        return 0
+    fi
+
+    _rss_file_ref="$(mktemp)"
+    _owned_ref=1
+    if (( fetch_if_missing )); then
+        if ! economist_rss_fetch_with_progress "${_rss_file_ref}"; then
+            economist_rss_temp_rm "${_rss_file_ref}"
+            _rss_file_ref=""
+            _owned_ref=0
+            return 1
+        fi
+        return 0
+    fi
+
+    economist_rss_temp_rm "${_rss_file_ref}"
+    _rss_file_ref=""
+    _owned_ref=0
+    return 1
+}
+
+economist_rss_release_file() {
+    local rss_file="$1" owned="${2:-0}"
+
+    if (( owned )); then
+        economist_rss_temp_rm "${rss_file}"
+    fi
+}
+
+economist_tty_color_green() {
+    economist_status_wanted || return 0
+    printf '\033[32m'
+}
+
+economist_tty_color_reset() {
+    economist_status_wanted || return 0
+    printf '\033[0m'
+}
+
 economist_rss_fetch_to() {
     local dest="$1"
 
@@ -707,20 +782,24 @@ economist_local_edition_status_for_iso() {
 }
 
 economist_sat_iso_for_edition_iso() {
-    local iso="$1" rss_file="" pos=""
+    local iso="$1" rss_file="" pos="" owned_rss=0
 
     [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
 
-    rss_file="$(mktemp)"
-    if economist_rss_fetch_to "${rss_file}"; then
-        pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
-        if [[ -n "${pos}" ]]; then
-            economist_edition_date_for_rss_position "${pos}"
-            rm -f "${rss_file}"
-            return 0
-        fi
+    if economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    elif ! economist_rss_resolve_file rss_file 1 owned_rss; then
+        return 1
     fi
-    rm -f "${rss_file}"
+
+    pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+    if [[ -n "${pos}" ]]; then
+        economist_edition_date_for_rss_position "${pos}"
+        (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
+        return 0
+    fi
+
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
     return 1
 }
 
@@ -1065,29 +1144,38 @@ economist_append_unique_iso() {
 
 economist_collect_verified_rss_edition_isos() {
     local array_name="$1"
+    local rss_file_in="${2:-}"
     local -n _isos_ref="${array_name}"
-    local rss_file="" pos=0 item_count=0 url="" iso="" ok=0
+    local rss_file="" owned_rss=0 pos=0 item_count=0 url="" iso="" ok=0
 
     _isos_ref=()
-    rss_file="$(mktemp)"
-    if economist_rss_fetch_with_progress "${rss_file}"; then
-        item_count="$(economist_rss_item_count "${rss_file}")"
-        if (( item_count > 0 )); then
-            if economist_status_wanted; then
-                printf 'Checking %s feed item(s) on server' "${item_count}" >&2
-            fi
-            for (( pos = 1; pos <= item_count; ++pos )); do
-                economist_status_wanted && printf '.' >&2
-                url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
-                [[ -n "${url}" ]] || continue
-                economist_verify_enclosure_on_server "${url}" || continue
-                iso="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
-                economist_append_unique_iso "${array_name}" "${iso}"
-            done
-            economist_status_wanted && printf ' done.\n' >&2
+    if [[ -n "${rss_file_in}" ]]; then
+        rss_file="${rss_file_in}"
+    elif economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    else
+        if ! economist_rss_resolve_file rss_file 1 owned_rss; then
+            return 1
         fi
     fi
-    economist_rss_temp_rm "${rss_file}"
+
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    if (( item_count > 0 )); then
+        if economist_status_wanted; then
+            printf 'Checking %s feed item(s) on server' "${item_count}" >&2
+        fi
+        for (( pos = 1; pos <= item_count; ++pos )); do
+            economist_status_wanted && printf '.' >&2
+            url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+            [[ -n "${url}" ]] || continue
+            economist_verify_enclosure_on_server "${url}" || continue
+            iso="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
+            economist_append_unique_iso "${array_name}" "${iso}"
+        done
+        economist_status_wanted && printf ' done.\n' >&2
+    fi
+
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
     (( ${#_isos_ref[@]} > 0 )) && ok=1
     (( ok ))
 }
@@ -1213,7 +1301,8 @@ economist_rss_build_pick_arrays_for_isos() {
     local -n _pick_issues_ref="$5"
     local -n _pick_sat_isos_ref="$6"
     local -n _pick_dirs_ref="$7"
-    local rss_file="" item_count=0 pos=0 url="" edition_iso="" title="" issue_no=""
+    local rss_file_in="${8:-}"
+    local rss_file="" owned_rss=0 item_count=0 pos=0 url="" edition_iso="" title="" issue_no=""
     local local_status="" processed_dir="" sat_iso=""
     local -A filter_map=()
     local iso=""
@@ -1229,19 +1318,23 @@ economist_rss_build_pick_arrays_for_isos() {
         filter_map["${iso}"]=1
     done
 
-    rss_file="$(mktemp)"
-    if ! economist_rss_fetch_with_progress "${rss_file}"; then
-        economist_rss_temp_rm "${rss_file}"
-        return 1
+    if [[ -n "${rss_file_in}" ]]; then
+        rss_file="${rss_file_in}"
+    elif economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    else
+        if ! economist_rss_resolve_file rss_file 1 owned_rss; then
+            return 1
+        fi
     fi
 
     item_count="$(economist_rss_item_count "${rss_file}")"
     if (( item_count > 0 )); then
-        if economist_status_wanted; then
+        if economist_status_wanted && ! economist_rss_cache_active; then
             printf 'Loading details for %s nearby edition(s)' "${#_filter_isos_ref[@]}" >&2
         fi
         for (( pos = 1; pos <= item_count; ++pos )); do
-            economist_status_wanted && printf '.' >&2
+            economist_status_wanted && ! economist_rss_cache_active && printf '.' >&2
             url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
             [[ -n "${url}" ]] || continue
             economist_verify_enclosure_on_server "${url}" || continue
@@ -1267,9 +1360,12 @@ economist_rss_build_pick_arrays_for_isos() {
             _pick_sat_isos_ref+=("${sat_iso}")
             _pick_dirs_ref+=("${processed_dir}")
         done
-        economist_status_wanted && printf ' done.\n' >&2
+        if economist_status_wanted && ! economist_rss_cache_active; then
+            printf ' done.\n' >&2
+        fi
     fi
-    economist_rss_temp_rm "${rss_file}"
+
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
 
     (( ${#_pick_isos_ref[@]} > 0 )) || return 1
     economist_reverse_pick_arrays "$2" "$3" "$4" "$5" "$6" "$7"
@@ -1284,6 +1380,8 @@ economist_interactive_select_from_pick_arrays() {
     local sat_isos_array_name="$6"
     local dirs_array_name="$7"
     local list_heading="$8"
+    local highlight_iso="${9:-}"
+    local requested_iso="${10:-}"
     local -n _picked_iso_ref="${picked_array_name}"
     local -n _pick_isos_ref="${isos_array_name}"
     local -n _pick_titles_ref="${titles_array_name}"
@@ -1302,9 +1400,16 @@ economist_interactive_select_from_pick_arrays() {
     while true; do
         echo
         echo "${list_heading}"
+        if [[ -n "${highlight_iso}" && -n "${requested_iso}" ]]; then
+            economist_tty_color_green
+            printf '  Green'
+            economist_tty_color_reset
+            printf ' = nearest verified edition to your requested date %s.\n' "${requested_iso}"
+        fi
         economist_show_available_print_editions \
             "${isos_array_name}" "${titles_array_name}" "${local_array_name}" \
-            "${issues_array_name}" "${sat_isos_array_name}" "${dirs_array_name}"
+            "${issues_array_name}" "${sat_isos_array_name}" "${dirs_array_name}" \
+            "${highlight_iso}"
         echo
 
         while true; do
@@ -1356,8 +1461,10 @@ economist_pick_edition_window_around_date() {
     local requested_iso="$1"
     local available_array_name="$2"
     local picked_array_name="$3"
+    local nearest_iso="${4:-}"
     local -n _available_ref="${available_array_name}"
     local -n _picked_iso_ref="${picked_array_name}"
+    local rss_file="" owned_rss=0
     local -a window_isos=() pick_isos=() pick_titles=() pick_local=() pick_issues=() pick_sat_isos=() pick_dirs=()
 
     _picked_iso_ref=""
@@ -1372,18 +1479,30 @@ economist_pick_edition_window_around_date() {
     fi
 
     economist_status_msg ""
-    economist_status_msg "Please wait — loading nearby verified editions from RSS..."
+    economist_status_msg "Loading nearby verified editions from feed..."
+
+    if economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    else
+        if ! economist_rss_resolve_file rss_file 1 owned_rss; then
+            echo "Could not load nearby editions from RSS." >&2
+            return 1
+        fi
+    fi
 
     if ! economist_rss_build_pick_arrays_for_isos \
-        window_isos pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs; then
+        window_isos pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs "${rss_file}"; then
+        (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
         echo "Could not load nearby editions from RSS." >&2
         return 1
     fi
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
 
     economist_interactive_select_from_pick_arrays \
         "${picked_array_name}" \
         pick_isos pick_titles pick_local pick_issues pick_sat_isos pick_dirs \
-        "Verified editions near ${requested_iso} (oldest at top; #1 = newest at bottom):"
+        "Verified editions near ${requested_iso} (oldest at top; #1 = newest at bottom):" \
+        "${nearest_iso}" "${requested_iso}"
 }
 
 economist_prompt_nearest_edition_fallback() {
@@ -1417,33 +1536,42 @@ economist_prompt_nearest_edition_fallback() {
 }
 
 economist_verify_edition_date_on_server() {
-    local iso="$1" rss_file="" pos=0 item_count=0 url="" edition_at_pos="" rc=1
+    local iso="$1" rss_file_in="${2:-}" rss_file="" owned_rss=0
+    local pos=0 item_count=0 url="" edition_at_pos="" rc=1
 
     [[ "${iso}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
 
-    rss_file="$(mktemp)"
-    if economist_rss_fetch_with_progress "${rss_file}"; then
-        item_count="$(economist_rss_item_count "${rss_file}")"
-        if (( item_count > 0 )); then
-            if economist_status_wanted; then
-                printf 'Checking edition %s on server' "${iso}" >&2
-            fi
-            for (( pos = 1; pos <= item_count; ++pos )); do
-                edition_at_pos="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
-                [[ "${edition_at_pos}" == "${iso}" ]] || continue
-                url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
-                if [[ -n "${url}" ]] && economist_verify_enclosure_on_server "${url}"; then
-                    economist_status_wanted && printf ' ok.\n' >&2
-                    rc=0
-                    break
-                fi
-            done
-            if (( rc != 0 )) && economist_status_wanted; then
-                printf '.. not found.\n' >&2
-            fi
+    if [[ -n "${rss_file_in}" ]]; then
+        rss_file="${rss_file_in}"
+    elif economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    else
+        if ! economist_rss_resolve_file rss_file 1 owned_rss; then
+            return 1
         fi
     fi
-    economist_rss_temp_rm "${rss_file}"
+
+    item_count="$(economist_rss_item_count "${rss_file}")"
+    if (( item_count > 0 )); then
+        if economist_status_wanted; then
+            printf 'Checking edition %s on server' "${iso}" >&2
+        fi
+        for (( pos = 1; pos <= item_count; ++pos )); do
+            edition_at_pos="$(economist_edition_cover_date_for_rss_item "${rss_file}" "${pos}")" || continue
+            [[ "${edition_at_pos}" == "${iso}" ]] || continue
+            url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+            if [[ -n "${url}" ]] && economist_verify_enclosure_on_server "${url}"; then
+                economist_status_wanted && printf ' ok.\n' >&2
+                rc=0
+                break
+            fi
+        done
+        if (( rc != 0 )) && economist_status_wanted; then
+            printf '.. not found.\n' >&2
+        fi
+    fi
+
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
     return "${rc}"
 }
 
@@ -1490,11 +1618,20 @@ economist_check_new_edition_for_run() {
     _resolved_iso_ref=""
 
     if [[ -n "${explicit_iso}" ]]; then
+        local rss_file="" rss_cache_started=0
+
         economist_status_msg ""
         economist_status_msg "Checking whether edition ${explicit_iso} is on the RSS server."
         economist_status_msg "Please wait — fetching the feed and verifying files..."
+        if ! economist_rss_cache_begin; then
+            echo "Failed to fetch RSS: ${ECONOMIST_RSS_URL}" >&2
+            return 1
+        fi
+        rss_cache_started=1
+        rss_file="$(economist_rss_cache_path)"
+
         _resolved_iso_ref=""
-        if economist_verify_edition_date_on_server "${explicit_iso}"; then
+        if economist_verify_edition_date_on_server "${explicit_iso}" "${rss_file}"; then
             _resolved_iso_ref="${explicit_iso}"
         else
             nearest_iso=""
@@ -1502,12 +1639,13 @@ economist_check_new_edition_for_run() {
             picked_nearby=""
             verified_isos=()
             economist_status_msg ""
-            economist_status_msg "Searching for the nearest verified edition (checking all RSS items)..."
-            if ! economist_collect_verified_rss_edition_isos verified_isos; then
+            economist_status_msg "Searching for the nearest verified edition in feed..."
+            if ! economist_collect_verified_rss_edition_isos verified_isos "${rss_file}"; then
                 issue_no="$(economist_issue_number_for_edition_date "${explicit_iso}" 2>/dev/null || echo "—")"
                 echo
                 echo "Edition ${explicit_iso} (issue ${issue_no}) is not on the RSS server."
                 echo "No verified substitute edition was found."
+                (( rss_cache_started )) && economist_rss_cache_end
                 return 1
             fi
             if economist_nearest_verified_from_available "${explicit_iso}" verified_isos nearest_iso \
@@ -1518,15 +1656,18 @@ economist_check_new_edition_for_run() {
                         _resolved_iso_ref="${nearest_iso}"
                         ;;
                     2)
-                        if economist_pick_edition_window_around_date "${explicit_iso}" verified_isos picked_nearby; then
+                        if economist_pick_edition_window_around_date \
+                            "${explicit_iso}" verified_isos picked_nearby "${nearest_iso}"; then
                             _resolved_iso_ref="${picked_nearby}"
                         else
                             echo "Download cancelled."
+                            (( rss_cache_started )) && economist_rss_cache_end
                             return 1
                         fi
                         ;;
                     *)
                         echo "Download cancelled."
+                        (( rss_cache_started )) && economist_rss_cache_end
                         return 1
                         ;;
                 esac
@@ -1535,9 +1676,11 @@ economist_check_new_edition_for_run() {
                 echo
                 echo "Edition ${explicit_iso} (issue ${issue_no}) is not on the RSS server."
                 echo "No verified substitute edition was found."
+                (( rss_cache_started )) && economist_rss_cache_end
                 return 1
             fi
         fi
+        # Keep RSS cache for confirm summary; runme clears it on EXIT.
     else
         economist_status_msg ""
         economist_status_msg "Checking RSS feed for the newest verified edition..."
@@ -1569,16 +1712,20 @@ economist_check_new_edition_for_run() {
 }
 
 economist_rss_title_for_edition_iso() {
-    local iso="$1" rss_file="" pos="" title=""
+    local iso="$1" rss_file="" pos="" title="" owned_rss=0
 
-    rss_file="$(mktemp)"
-    if economist_rss_fetch_to "${rss_file}"; then
-        pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
-        if [[ -n "${pos}" ]]; then
-            title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
-        fi
+    if economist_rss_cache_path >/dev/null 2>&1; then
+        rss_file="$(economist_rss_cache_path)"
+    elif ! economist_rss_resolve_file rss_file 1 owned_rss; then
+        return 1
     fi
-    economist_rss_temp_rm "${rss_file}"
+
+    pos="$(economist_rss_position_for_edition_date "${rss_file}" "${iso}" 2>/dev/null || true)"
+    if [[ -n "${pos}" ]]; then
+        title="$(economist_rss_item_title_at "${rss_file}" "${pos}")"
+    fi
+
+    (( owned_rss )) && economist_rss_release_file "${rss_file}" "${owned_rss}"
     [[ -n "${title}" ]] || return 1
     echo "${title}"
 }
@@ -1792,7 +1939,14 @@ economist_show_available_print_editions() {
     local -n _issues_ref="$4"
     local -n _sat_isos_ref="$5"
     local -n _dirs_ref="$6"
+    local highlight_iso="${7:-}"
     local idx=0 pick_num=0
+    local green="" reset=""
+
+    if [[ -n "${highlight_iso}" ]] && economist_status_wanted; then
+        green=$'\033[32m'
+        reset=$'\033[0m'
+    fi
 
     printf '  %3s %-12s %-36s %-18s %6s %11s %48s\n' \
         "#" "Edition" "Title" "Local" "Issue" "Age" "Size"
@@ -1800,18 +1954,35 @@ economist_show_available_print_editions() {
         "---" "--------" "-----" "-----" "-----" "---------" "------------------------------------------------"
     for (( idx = 0; idx < ${#_isos_ref[@]}; ++idx )); do
         pick_num=$((${#_isos_ref[@]} - idx))
-        printf '  %3s %-12s %-36s %-18s %6s %11s %48s\n' \
-            "${pick_num}" \
-            "${_isos_ref[idx]}" \
-            "${_titles_ref[idx]:0:36}" \
-            "${_local_ref[idx]:0:18}" \
-            "${_issues_ref[idx]}" \
-            "$(economist_format_age_from_today "${_isos_ref[idx]}")" \
-            "$(economist_show_available_edition_size \
+        if [[ -n "${highlight_iso}" && "${_isos_ref[idx]}" == "${highlight_iso}" ]]; then
+            printf '  %s' "${green}"
+            printf '%3s %-12s %-36s %-18s %6s %11s %48s' \
+                "${pick_num}" \
                 "${_isos_ref[idx]}" \
-                "${_sat_isos_ref[idx]}" \
+                "${_titles_ref[idx]:0:36}" \
+                "${_local_ref[idx]:0:18}" \
                 "${_issues_ref[idx]}" \
-                "${_dirs_ref[idx]}")"
+                "$(economist_format_age_from_today "${_isos_ref[idx]}")" \
+                "$(economist_show_available_edition_size \
+                    "${_isos_ref[idx]}" \
+                    "${_sat_isos_ref[idx]}" \
+                    "${_issues_ref[idx]}" \
+                    "${_dirs_ref[idx]}")"
+            printf '%s\n' "${reset}"
+        else
+            printf '  %3s %-12s %-36s %-18s %6s %11s %48s\n' \
+                "${pick_num}" \
+                "${_isos_ref[idx]}" \
+                "${_titles_ref[idx]:0:36}" \
+                "${_local_ref[idx]:0:18}" \
+                "${_issues_ref[idx]}" \
+                "$(economist_format_age_from_today "${_isos_ref[idx]}")" \
+                "$(economist_show_available_edition_size \
+                    "${_isos_ref[idx]}" \
+                    "${_sat_isos_ref[idx]}" \
+                    "${_issues_ref[idx]}" \
+                    "${_dirs_ref[idx]}")"
+        fi
         if (( pick_num % 10 == 0 )); then
             echo
         fi

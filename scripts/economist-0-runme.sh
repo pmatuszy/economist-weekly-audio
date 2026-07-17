@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# v. 20260717.125401 - EXIT trap clears RSS cache after explicit-date run
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - abort if resolved edition not in RSS; log resolved date
 # v. 20260717.124401 - print validated config block before RSS/edition checks
@@ -234,6 +235,9 @@ if [[ ${#edition_date_args[@]} -eq 1 ]]; then
 fi
 
 resolved_edition_iso=""
+if [[ -n "${explicit_edition_iso}" ]]; then
+    trap 'economist_rss_cache_end' EXIT
+fi
 if [[ "${ECONOMIST_SKIP_DOWNLOAD_PROCEED_PROMPT:-0}" != 1 ]]; then
     if ! economist_check_new_edition_for_run "${explicit_edition_iso}" "${ECONOMIST_FORCE_REPROCESS:-0}" resolved_edition_iso; then
         if [[ -z "${explicit_edition_iso}" ]]; then
