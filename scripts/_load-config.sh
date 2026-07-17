@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# v. 20260717.125501 - default yes on nearby-editions browse prompt
 # v. 20260717.125401 - reuse cached RSS; green nearest row in nearby picker
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - match editions by RSS title cover date only (fix false verify)
@@ -1445,14 +1446,17 @@ economist_prompt_browse_editions_near_date() {
     local requested_iso="$1" answer="" timed_out=0
 
     economist_read_tty_char \
-        "Show verified editions near ${requested_iso} (5 before, 5 after)? [y/N]: " \
+        "Show verified editions near ${requested_iso} (5 before, 5 after)? [Y/n]: " \
         answer 60 timed_out
     case "${answer}" in
-        y|Y)
-            (( timed_out == 0 ))
+        n|N)
+            if (( timed_out == 0 )); then
+                return 1
+            fi
+            return 0
             ;;
-        *)
-            return 1
+        ''|y|Y|*)
+            return 0
             ;;
     esac
 }

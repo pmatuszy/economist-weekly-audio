@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v. 20260717.125401 - EXIT trap clears RSS cache after explicit-date run
+# v. 20260717.125501 - default yes on nearby-editions browse prompt
 # v. 20260717.125001 - fix circular nameref in nearby-edition picker
 # v. 20260717.124801 - abort if resolved edition not in RSS; log resolved date
 # v. 20260717.124401 - print validated config block before RSS/edition checks
