@@ -1360,7 +1360,7 @@ economist_show_and_pick_available_editions() {
     kill "${dots_pid}" 2>/dev/null || true
     wait "${dots_pid}" 2>/dev/null || true
 
-    item_count="$(economist_rss_item_count "${rss_file}")"
+    item_count="$(economist_rss_item_count "${_economist_rss_tmp}")"
     if [[ "${item_count}" -eq 0 ]]; then
         printf ' done (no items).\n' >&2
         echo "No items found in RSS feed." >&2
@@ -1372,7 +1372,7 @@ economist_show_and_pick_available_editions() {
 
     for (( pos = 1; pos <= item_count; ++pos )); do
         printf '.' >&2
-        url="$(economist_rss_enclosure_url_at "${rss_file}" "${pos}" 2>/dev/null || true)"
+        url="$(economist_rss_enclosure_url_at "${_economist_rss_tmp}" "${pos}" 2>/dev/null || true)"
         [[ -n "${url}" ]] || continue
         if ! economist_verify_enclosure_on_server "${url}"; then
             continue
